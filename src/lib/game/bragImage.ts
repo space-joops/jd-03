@@ -154,9 +154,9 @@ function toBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   });
 }
 
-/** 도전장 URL — 서버 없이 쿼리에 기록·이름을 인코딩한다 */
+/** 도전장 URL — /c 라우트가 동적 OG 미리보기를 제공한다 */
 export function challengeUrl(s: GameState): string {
-  return `${window.location.origin}/?c=${s.sortieBestKg}&n=${encodeURIComponent(s.name)}`;
+  return `${window.location.origin}/c?kg=${s.sortieBestKg}&n=${encodeURIComponent(s.name)}`;
 }
 
 /** 카드 우상단에 QR 코드 — 스크린샷 경유 유입까지 커버. 실패해도 카드는 발행 */

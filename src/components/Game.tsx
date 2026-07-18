@@ -236,17 +236,17 @@ export default function Game() {
     promptTimer.current = setTimeout(() => setSharePrompt(null), 12_000);
   }, []);
 
-  // 도전장 링크 파싱 (/?c={kg}&n={이름}) — URL은 정리하고 상태만 유지
+  // 도전장 링크 파싱 (/c?kg={kg}&n={이름}, 구형 /?c= 호환) — URL은 정리하고 상태만 유지
   const [challenge, setChallenge] = useState<Challenge | null>(null);
   const [demoSortie, setDemoSortie] = useState(false);
   const [demoResult, setDemoResult] = useState<{ kg: number; win: boolean } | null>(null);
   useEffect(() => {
     try {
       const q = new URLSearchParams(window.location.search);
-      const kg = Number(q.get("c"));
+      const kg = Number(q.get("kg") ?? q.get("c"));
       if (!Number.isFinite(kg) || kg <= 0) return;
       setChallenge({ kg: Math.min(999_999, Math.round(kg)), name: (q.get("n") || "누군가").slice(0, 10) });
-      window.history.replaceState(null, "", window.location.pathname);
+      window.history.replaceState(null, "", "/");
     } catch {
       // 잘못된 링크는 무시
     }
