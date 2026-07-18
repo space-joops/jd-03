@@ -8,6 +8,9 @@
 // - update(dt)는 상태만 바꾸고 draw()는 읽기만 한다.
 // - dt 상한으로 백그라운드 탭 복귀 시 순간이동(터널링)을 막는다.
 // - 획득 판정은 보이는 것보다 후하게, 피격 판정은 짜게. 자석으로 슬쩍 돕는다.
+//
+// 전체 화면: fixed 오버레이가 뷰포트를 덮고, 논리 해상도는 화면비에 맞춰
+// 동적으로 잡는다 (jd-02 fitCanvas 방식). 픽셀 스케일 하한으로 도트 감성 유지.
 // ============================================================================
 
 import { useEffect, useRef } from "react";
@@ -15,8 +18,9 @@ import type { GameState } from "@/lib/game/types";
 import { SORTIE_MS, type SortieOutcome } from "@/lib/game/engine";
 import { ORBIT_SPRITES, drawSprite, spriteW, spriteH } from "@/lib/game/sprites";
 
-const W = 240;
-const H = 200;
+/** 기준 논리 해상도 — 픽셀 스케일 계산의 바탕 */
+const BASE_W = 240;
+const BASE_H = 200;
 const HUD_H = 18;
 
 /** 손맛 튜닝 상수 — 밸런스는 여기부터 만진다 */
@@ -34,6 +38,7 @@ const TUNE = {
   grace: 2, // 시작 직후 위험물 미출현(초)
   spawnBase: 0.55, // 기본 스폰 간격(초) — ±30% 지터
   maxDt: 0.05, // 백그라운드 복귀 시 순간이동 방지
+  minScale: 1.5, // 픽셀 확대 하한 — 데스크톱에서 도트가 안 뭉개지게
 };
 
 type Kind = "chip" | "bolt" | "tank" | "shard";
@@ -82,10 +87,10 @@ function pickKind(allowShard: boolean): Kind {
   return "chip";
 }
 
-function makeJunk(kind: Kind): Junk {
-  const y0 = HUD_H + 20 + Math.random() * (H - HUD_H - 40);
+function makeJunk(kind: Kind, w: number, h: number): Junk {
+  const y0 = HUD_H + 20 + Math.random() * Math.max(1, h - HUD_H - 40);
   const base = {
-    x: W + 16,
+    x: w + 16,
     y0,
     y: y0,
     sway: 4 + Math.random() * 8,
@@ -148,9 +153,10 @@ function drawJunk(ctx: CanvasRenderingContext2D, j: Junk, scale: number) {
 
 const EAT_WORDS = ["냠!", "꿀꺽!", "맛있다!", "좋아!"];
 
-const STARS = Array.from({ length: 30 }, () => ({
-  x: Math.random() * W,
-  y: Math.random() * H,
+/** 별 배치는 화면 크기와 무관한 상대 좌표로 들고 있는다 */
+const STARS = Array.from({ length: 42 }, () => ({
+  fx: Math.random(),
+  fy: Math.random(),
   tw: Math.random() * Math.PI * 2,
 }));
 
@@ -181,8 +187,22 @@ export default function SortieGame({
     const follow = TUNE.follow + Math.min(4, init.speed * 0.05);
     const magnetRange = 12 + Math.min(28, init.pull * 0.5);
 
+    // ---- 화면 맞춤: 논리 해상도를 뷰포트 비율로 동적 결정 (jd-02 fitCanvas) ----
+    let w = BASE_W;
+    let h = BASE_H;
+    const fit = () => {
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const pxScale = Math.max(TUNE.minScale, Math.min(vw / BASE_W, vh / BASE_H));
+      w = Math.round(vw / pxScale);
+      h = Math.round(vh / pxScale);
+      canvas.width = w;
+      canvas.height = h;
+    };
+    fit();
+
     // ---- 게임 상태 (전부 클로저 지역 변수) ----
-    const pet = { x: 48, y: H / 2 };
+    const pet = { x: Math.min(48, w * 0.2), y: h / 2 };
     let tx = pet.x;
     let ty = pet.y;
     let timeLeft = SORTIE_MS / 1000;
@@ -210,7 +230,10 @@ export default function SortieGame({
       kgCollected += j.kg;
       eaten += 1;
       popups.push({
-        text: Math.random() < 0.5 ? `+${Math.round(j.kg)}kg` : EAT_WORDS[Math.floor(Math.random() * EAT_WORDS.length)],
+        text:
+          Math.random() < 0.5
+            ? `+${Math.round(j.kg)}kg`
+            : EAT_WORDS[Math.floor(Math.random() * EAT_WORDS.length)],
         x: j.x,
         y: j.y - 8,
         age: 0,
@@ -240,15 +263,15 @@ export default function SortieGame({
       // 스폰 — 일정 리듬이 외워지지 않게 ±30% 지터
       spawnTimer -= dt;
       if (spawnTimer <= 0) {
-        junks.push(makeJunk(pickKind(elapsed > TUNE.grace)));
+        junks.push(makeJunk(pickKind(elapsed > TUNE.grace), w, h));
         spawnTimer = TUNE.spawnBase * (0.7 + Math.random() * 0.6);
       }
 
       // 펫: 포인터 목표점을 감쇠 추적
       pet.x += (tx - pet.x) * Math.min(1, dt * follow);
       pet.y += (ty - pet.y) * Math.min(1, dt * follow);
-      pet.x = Math.max(petR, Math.min(W - petR, pet.x));
-      pet.y = Math.max(HUD_H + petR, Math.min(H - petR, pet.y));
+      pet.x = Math.max(petR, Math.min(w - petR, pet.x));
+      pet.y = Math.max(HUD_H + petR, Math.min(h - petR, pet.y));
 
       // 잔해: 역순 순회 + splice (정방향 순회 중 삭제는 건너뛰기 버그)
       for (let i = junks.length - 1; i >= 0; i--) {
@@ -304,7 +327,7 @@ export default function SortieGame({
     // ---- draw: 읽기만 한다 ----
     const draw = () => {
       ctx.fillStyle = "#05060f";
-      ctx.fillRect(0, 0, W, H);
+      ctx.fillRect(0, 0, w, h);
       ctx.save();
       if (shake > 0) {
         const power = (shake / TUNE.shakeTime) * TUNE.shakeAmp;
@@ -315,8 +338,8 @@ export default function SortieGame({
       for (const s of STARS) {
         const a = 0.3 + 0.5 * Math.abs(Math.sin(elapsed * 1.5 + s.tw));
         ctx.fillStyle = `rgba(220,230,255,${a.toFixed(2)})`;
-        const x = (((s.x - elapsed * 24) % W) + W) % W;
-        ctx.fillRect(Math.round(x), Math.round(s.y), 1, 1);
+        const x = (((s.fx * w - elapsed * 24) % w) + w) % w;
+        ctx.fillRect(Math.round(x), Math.round(s.fy * h), 1, 1);
       }
 
       for (const j of junks) {
@@ -362,20 +385,20 @@ export default function SortieGame({
 
       // HUD (흔들림 밖)
       ctx.fillStyle = "rgba(5,6,15,0.85)";
-      ctx.fillRect(0, 0, W, HUD_H);
+      ctx.fillRect(0, 0, w, HUD_H);
       ctx.fillStyle = "#1c2440";
-      ctx.fillRect(0, HUD_H - 1, W, 1);
+      ctx.fillRect(0, HUD_H - 1, w, 1);
       ctx.fillStyle = "#f4b860";
-      ctx.fillRect(0, 0, Math.round(W * (timeLeft / (SORTIE_MS / 1000))), 2);
+      ctx.fillRect(0, 0, Math.round(w * (timeLeft / (SORTIE_MS / 1000))), 2);
       ctx.font = "10px monospace";
       ctx.fillStyle = "#7dd3fc";
       ctx.fillText(`T-${String(Math.ceil(timeLeft)).padStart(2, "0")}s`, 5, 13);
       ctx.fillStyle = "#7ee8a2";
       const kgText = `${Math.round(kgCollected)}kg (${eaten})`;
-      ctx.fillText(kgText, W - 6 - ctx.measureText(kgText).width, 13);
+      ctx.fillText(kgText, w - 6 - ctx.measureText(kgText).width, 13);
       if (hits > 0) {
         ctx.fillStyle = "#ff6b6b";
-        ctx.fillText(`×${hits}`, 108, 13);
+        ctx.fillText(`×${hits}`, 64, 13);
       }
     };
 
@@ -394,8 +417,8 @@ export default function SortieGame({
     // ---- 입력: 포인터 위치가 목표점 ----
     const setTarget = (e: PointerEvent) => {
       const rect = canvas.getBoundingClientRect();
-      tx = ((e.clientX - rect.left) / rect.width) * W;
-      ty = ((e.clientY - rect.top) / rect.height) * H;
+      tx = ((e.clientX - rect.left) / rect.width) * w;
+      ty = ((e.clientY - rect.top) / rect.height) * h;
       if (e.pointerType === "touch") ty -= TUNE.touchOffsetY;
     };
     const onDown = (e: PointerEvent) => {
@@ -410,6 +433,7 @@ export default function SortieGame({
     canvas.addEventListener("pointerdown", onDown);
     canvas.addEventListener("pointermove", onMove);
     canvas.addEventListener("contextmenu", onContextMenu);
+    window.addEventListener("resize", fit);
 
     return () => {
       done = true;
@@ -417,22 +441,22 @@ export default function SortieGame({
       canvas.removeEventListener("pointerdown", onDown);
       canvas.removeEventListener("pointermove", onMove);
       canvas.removeEventListener("contextmenu", onContextMenu);
+      window.removeEventListener("resize", fit);
     };
   }, []);
 
   return (
-    <div className="relative">
+    <div className="fixed inset-0 z-50 bg-[#05060f]">
       <canvas
         ref={canvasRef}
-        width={W}
-        height={H}
-        className="w-full touch-none"
-        style={{ imageRendering: "pixelated", aspectRatio: `${W}/${H}` }}
+        className="absolute inset-0 h-full w-full touch-none"
+        style={{ imageRendering: "pixelated" }}
         aria-label="수동 조종 미니게임 화면"
       />
       <button
         onClick={() => finishRef.current()}
-        className="absolute bottom-2 right-2 border border-[#1c2440] bg-[#0b0f1e]/85 px-2 py-1 text-[10px] text-[#8b93b5]"
+        className="absolute right-2 border border-[#1c2440] bg-[#0b0f1e]/85 px-2.5 py-1.5 text-[11px] text-[#8b93b5]"
+        style={{ top: "max(1.5rem, env(safe-area-inset-top))" }}
       >
         조기 복귀 ▲
       </button>

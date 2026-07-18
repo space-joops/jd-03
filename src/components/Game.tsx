@@ -217,6 +217,9 @@ export default function Game() {
   const endSortie = useCallback((r: SortieOutcome) => {
     setSortie(false);
     setState((s) => (s ? settleSortie(s, r, Date.now()) : s));
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    }
   }, []);
 
   const install = useCallback(async () => {
@@ -252,6 +255,12 @@ export default function Game() {
     if (cd("sortie") > 0 || state.prop < SORTIE_PROP_COST) return;
     dispatch("sortie");
     setSortie(true);
+    // 지원 브라우저에선 네이티브 전체화면까지 — 클릭 제스처 안에서 호출해야 한다
+    try {
+      document.documentElement.requestFullscreen?.()?.catch(() => {});
+    } catch {
+      // iOS Safari 등 미지원 환경 — CSS 오버레이만으로 충분
+    }
   };
 
   return (
@@ -265,13 +274,12 @@ export default function Game() {
         </div>
       </header>
 
-      {/* 픽셀 뷰 (수동 조종 중에는 미니게임으로 전환) */}
+      {/* 수동 조종 미니게임 — 전체 화면 오버레이 */}
+      {sortie && state.phase === "orbit" && <SortieGame state={state} onEnd={endSortie} />}
+
+      {/* 픽셀 뷰 */}
       <div className="relative shrink-0 border-2 border-[#1c2440] bg-[#05060f]">
-        {sortie && state.phase === "orbit" ? (
-          <SortieGame state={state} onEnd={endSortie} />
-        ) : (
-          <PixelView state={state} />
-        )}
+        <PixelView state={state} />
         {state.phase === "orbit" && !sortie && (
           <div className="absolute left-2 top-2 text-[11px] leading-4 text-[#7dd3fc]">
             <div>ALT 550km</div>
