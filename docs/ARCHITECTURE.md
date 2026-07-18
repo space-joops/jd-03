@@ -44,12 +44,13 @@
 | `storage.ts` | localStorage 저장/로드. **구버전 세이브 백필** — 새 상태 필드를 추가하면 여기에 기본값을 보강해야 기존 유저가 크래시하지 않음 |
 | `sprites.ts` | 픽셀 스프라이트를 문자열 그리드 + 팔레트로 정의. `drawSprite`로 캔버스에 찍음. PWA 아이콘도 이 데이터에서 생성 |
 | `sound.ts` | Web Audio 신시사이저. `chirp`(단음 합성) 기반 효과음들, 로그 kind 매핑(`playLogSound`), 추진 엔진음 루프, 뮤트 저장 |
+| `bragImage.ts` | 자랑 카드 이미지 계층. 오프스크린 캔버스로 1080×1080 PNG 생성(공용 크롬 `makeCard`/`drawPetBlock` + 상태 카드/스코어 카드 2종), kg 비유 카피(`kgAnalogy`), QR(qrcode 동적 import), 도전장 URL, 공유 3단 폴백(`shareBlob`: Web Share → 클립보드 → 다운로드) |
 
 ### `components/` — 표현 계층
 
 | 파일 | 역할 |
 | --- | --- |
-| `Game.tsx` | 메인 컴포넌트. 부팅(로드+정산), 1초 틱, 자동 저장, 액션 디스패치, 새 로그 → 사운드 훅, PWA 설치 버튼, 뮤트, 푸터 |
+| `Game.tsx` | 메인 컴포넌트. 부팅(로드+정산), 1초 틱, 자동 저장, 액션 디스패치, 새 로그 → 사운드·공유 프롬프트 훅, 도전장 파싱·데모 출격, PWA 설치 버튼, 뮤트, 푸터 |
 | `PixelView.tsx` | 본편 캔버스(240×200). phase별 씬(지상/발사/궤도)과 이벤트 연출(유성우 스트릭·플레어 오버레이·대형 잔해 마커)을 rAF로 그림. 상태는 `stateRef`로 읽기만 |
 | `SortieGame.tsx` | 수동 조종 미니게임. 아래 별도 설명 |
 | `SwRegister.tsx` | 프로덕션에서만 서비스 워커 등록. 등록 URL에 `?v={package.json version}`을 붙여 캐시 세대를 연동 |
@@ -65,6 +66,15 @@ jd-02의 게임 본체 구조를 그대로 따릅니다:
 - 화면 맞춤: 뷰포트 비율로 논리 해상도를 동적 결정(`fit()`), 픽셀 스케일 하한으로 도트 감성 유지
 - 종료는 `finish()` 한 곳으로 수렴(중복 호출 가드) → `onEnd(결과)` → 부모가 `settleSortie`로 본편에 정산
 - 손맛 수치는 파일 상단 `TUNE` 상수에 모여 있음 — 밸런스 조정은 로직이 아니라 여기부터
+
+### 공유·바이럴 계층
+
+사건 발생 → 공유 제안 → 카드 공유 → 링크 유입의 루프:
+
+1. **감지**: `Game.tsx`의 로그 워처가 사운드와 함께 공유 프롬프트 트리거를 감지한다 — 로그 메시지 마커(🏆 신기록 / ✨ 진화 / 🪝 견인 성공) 또는 임무 일차 기념일. 우선순위 최상위 1건만 배너로 노출(12초 자동 소멸)
+2. **카드 생성**: `bragImage.ts`가 클라이언트에서 PNG를 그린다. 신기록은 스코어 카드, 그 외는 상태 카드. 스코어 카드의 텍스트·QR에는 도전장 URL(`/c?kg={sortieBestKg}&n={이름}`)이 실린다
+3. **유입**: 도전장 링크의 쿼리를 `Game.tsx`가 파싱(검증 후 주소를 `/`로 정리). 신규 방문자는 인트로에서 데모 기체(`DEMO_STATE`)로 가입 없이 1판 출격 → `sortieYieldKg`(엔진과 동일 공식)로 승패 비교 → 알 배정 CTA. 기존 유저는 토스트 안내만
+4. **링크 미리보기 (서버)**: `app/c/page.tsx`가 `generateMetadata`로 개인화 og:title·og:image를 동적 생성(이 라우트만 SSR, 메인 `/`은 정적 유지). `app/api/og/route.tsx`는 next/og(`ImageResponse`)로 1200×630 카드를 렌더 — Satori에는 캔버스가 없어 스프라이트를 div 그리드로 재현하고, 한글은 Galmuri Bold TTF를 Node 런타임에서 로드(`next.config.ts`의 `outputFileTracingIncludes`로 번들에 포함). 동일 쿼리는 CDN 1일 캐시. OG 절대 URL 기준은 layout의 `metadataBase`(`NEXT_PUBLIC_SITE_URL` → Vercel 프로덕션 URL 폴백)
 
 ### PWA
 

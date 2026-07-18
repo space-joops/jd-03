@@ -48,8 +48,9 @@
 | 사운드 | Web Audio API (오실레이터 합성) |
 | 저장 | localStorage (버전 필드 + 구버전 백필) |
 | PWA | 수제 서비스 워커 + `app/manifest.ts` |
+| 공유 | Canvas PNG 카드 + Web Share API, QR([qrcode](https://www.npmjs.com/package/qrcode), 동적 import), next/og 링크 미리보기 |
 
-외부 게임 엔진, 상태 관리 라이브러리, 오디오/이미지 에셋을 쓰지 않습니다.
+외부 게임 엔진, 상태 관리 라이브러리, 오디오/이미지 에셋을 쓰지 않습니다. 런타임 의존성은 Next/React 외에 QR 생성용 `qrcode`와 픽셀 폰트 `galmuri`뿐입니다.
 
 ## 시작하기
 
@@ -70,11 +71,13 @@ npm run start   # 빌드 결과 서빙 — PWA 설치/서비스 워커는 여기
 ```
 src/
 ├─ app/
-│  ├─ layout.tsx        # 메타데이터·뷰포트·PWA(iOS) 설정
-│  ├─ page.tsx          # 진입점 (Game 렌더)
+│  ├─ layout.tsx        # 메타데이터·뷰포트·OG 기본값·PWA(iOS) 설정
+│  ├─ page.tsx          # 진입점 (Game 렌더, 정적)
+│  ├─ c/page.tsx        # 도전장 랜딩 — 개인화 OG 메타 동적 생성
+│  ├─ api/og/route.tsx  # 링크 미리보기 카드 서버 렌더 (next/og)
 │  └─ manifest.ts       # PWA 웹 앱 매니페스트
 ├─ components/
-│  ├─ Game.tsx          # 메인 UI — 상태 패널·액션 버튼·로그·푸터, 사운드 훅
+│  ├─ Game.tsx          # 메인 UI — 상태·액션·로그·사운드/공유 프롬프트 훅·도전장 파싱
 │  ├─ PixelView.tsx     # 본편 픽셀 캔버스 (지상/발사/궤도 씬)
 │  ├─ SortieGame.tsx    # 수동 조종 미니게임 (전체 화면, 조그셔틀+관성 물리)
 │  └─ SwRegister.tsx    # 서비스 워커 등록 (프로덕션 전용)
@@ -83,7 +86,8 @@ src/
    ├─ types.ts          # GameState 등 타입 정의
    ├─ storage.ts        # localStorage 저장/로드 + 구버전 백필
    ├─ sprites.ts        # 픽셀 스프라이트 데이터와 그리기
-   └─ sound.ts          # Web Audio 신시사이저
+   ├─ sound.ts          # Web Audio 신시사이저
+   └─ bragImage.ts      # 자랑/스코어 카드 PNG 생성 + QR + 공유 3단 폴백
 public/
 ├─ sw.js                # 서비스 워커 (오프라인 캐싱)
 └─ icons/               # PWA 아이콘 (EGG 스프라이트에서 생성)
@@ -97,6 +101,7 @@ docs/                   # 아래 '문서' 참조
 | [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) | **게임 요구사항 명세** — 단계 흐름·모든 밸런스 수치·이벤트 규칙·PWA/사운드 요구사항. 수치의 문서상 원본 |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | **코드 아키텍처** — 순수 엔진/표현 분리, 데이터 흐름, 모듈별 역할, 미니게임 루프 구조 |
 | [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) | **컨트리뷰션 가이드** — 웹 개발이 처음이어도 따라올 수 있는 참여 안내서 |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | **개발 이력** — MVP부터 현재까지 마일스톤별 연혁과 현재 상태 요약 |
 | [docs/backlog/](docs/backlog/viral-brag.md) | **백로그** — 다음 단계 아이디어 (자랑 기능 바이럴화 로드맵 등) |
 
 ## 버전과 배포
@@ -109,6 +114,10 @@ npm version minor   # 0.2.1 → 0.3.0 (기능 추가)
 ```
 
 버전을 올려 배포하면 ① 푸터의 `v{버전}` 표기가 바뀌고 ② 서비스 워커 등록 URL(`/sw.js?v={버전}`)이 바뀌어 새 워커가 설치되면서 이전 세대 캐시가 자동 정리됩니다. 페이지 네비게이션이 네트워크 우선이라, 온라인 상태에서 앱을 다시 열면 항상 최신 버전이 적용됩니다.
+
+### Vercel
+
+메인 페이지는 정적으로 서빙되고, 도전장 미리보기 라우트(`/c`, `/api/og`)만 서버리스 함수로 동작합니다. 커스텀 도메인을 쓰는 경우 OG 이미지의 절대 URL을 위해 환경변수 `NEXT_PUBLIC_SITE_URL=https://도메인`을 설정하세요 (미설정 시 Vercel 프로덕션 URL 자동 사용). 배포 후 링크 미리보기는 [카카오 공유 디버거](https://developers.kakao.com/tool/debugger/sharing)에서 확인·캐시 갱신할 수 있습니다.
 
 ## 참조 프로젝트
 
