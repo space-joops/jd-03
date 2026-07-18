@@ -18,6 +18,14 @@ import { useEffect, useRef } from "react";
 import type { GameState } from "@/lib/game/types";
 import { SORTIE_MS, type SortieOutcome } from "@/lib/game/engine";
 import { ORBIT_SPRITES, drawSprite, spriteW, spriteH } from "@/lib/game/sprites";
+import {
+  ensureAudio,
+  playEat,
+  playHit,
+  playSortieEnd,
+  playSortieStart,
+  updateThrustSound,
+} from "@/lib/game/sound";
 
 /** 기준 논리 해상도 — 픽셀 스케일 계산의 바탕 */
 const BASE_W = 240;
@@ -260,10 +268,16 @@ export default function SortieGame({
     const popups: Popup[] = [];
     let done = false;
 
+    // 조종 버튼 클릭 제스처 직후라 오디오가 살아 있다 — 출격 휘리릭
+    ensureAudio();
+    playSortieStart();
+
     const finish = () => {
       if (done) return;
       done = true;
       cancelAnimationFrame(raf);
+      updateThrustSound(0); // 엔진음 정지
+      playSortieEnd();
       onEndRef.current({ kg: Math.round(kgCollected), eaten, hits });
     };
     finishRef.current = finish;
@@ -282,6 +296,7 @@ export default function SortieGame({
         age: 0,
         color: "#7ee8a2",
       });
+      playEat();
     };
 
     const hit = (j: Junk) => {
@@ -290,6 +305,7 @@ export default function SortieGame({
       shake = TUNE.shakeTime;
       popups.push({ text: "아야!", x: pet.x, y: pet.y - petR - 8, age: 0, color: "#ff6b6b" });
       junks.splice(junks.indexOf(j), 1);
+      playHit();
     };
 
     // ---- update: 상태만 바꾼다 ----
@@ -332,6 +348,8 @@ export default function SortieGame({
       } else {
         fuel = Math.min(TUNE.maxFuel, fuel + TUNE.fuelRegen * dt);
       }
+      // 엔진음: 분사 중 1~3단, 아니면 정지
+      updateThrustSound(thrusting ? thrustLevel + 1 : 0);
 
       // --- 우주 관성: 마찰 감쇠 + 최소 표류 속도 유지 ---
       vx -= vx * TUNE.friction * dt;
@@ -569,6 +587,7 @@ export default function SortieGame({
     return () => {
       done = true;
       cancelAnimationFrame(raf);
+      updateThrustSound(0); // 언마운트 시 엔진음이 남지 않게
       canvas.removeEventListener("pointerdown", onDown);
       canvas.removeEventListener("pointermove", onMove);
       canvas.removeEventListener("pointerup", onUp);

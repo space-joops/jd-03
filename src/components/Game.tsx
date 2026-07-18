@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { GameState, LogKind } from "@/lib/game/types";
+import type { GameState, LogEntry, LogKind } from "@/lib/game/types";
 import {
   act,
   ActionId,
@@ -20,6 +20,17 @@ import {
   type SortieOutcome,
 } from "@/lib/game/engine";
 import { clearState, loadState, saveState } from "@/lib/game/storage";
+import {
+  ensureAudio,
+  initAudioListener,
+  initSound,
+  isMuted,
+  LOG_SOUND_PRIORITY,
+  playLaunch,
+  playLogSound,
+  playTap,
+  setMuted,
+} from "@/lib/game/sound";
 import PixelView from "./PixelView";
 import SortieGame from "./SortieGame";
 
@@ -141,6 +152,41 @@ export default function Game() {
   const [sortie, setSortie] = useState(false);
   const sortieRef = useRef(false);
   sortieRef.current = sortie;
+  const [mutedUi, setMutedUi] = useState(false);
+
+  // 사운드 초기화: 뮤트 설정 로드 + 첫 제스처에서 오디오 언락
+  useEffect(() => {
+    initSound();
+    setMutedUi(isMuted());
+    initAudioListener();
+  }, []);
+
+  // 새 이벤트 로그 → kind별 효과음 (게임 전 분야 공통 사운드 훅)
+  const prevLogRef = useRef<LogEntry | null | undefined>(undefined);
+  const prevPhaseRef = useRef<GameState["phase"] | null>(null);
+  useEffect(() => {
+    if (!state) {
+      prevLogRef.current = undefined;
+      prevPhaseRef.current = null;
+      return;
+    }
+    // 발사 순간은 로그 매핑 대신 전용 럼블
+    if (prevPhaseRef.current && prevPhaseRef.current !== "launching" && state.phase === "launching") {
+      playLaunch();
+    }
+    prevPhaseRef.current = state.phase;
+
+    const first = state.log[0];
+    const prev = prevLogRef.current;
+    prevLogRef.current = first;
+    if (prev === undefined || !first || first === prev) return; // 부팅 직후엔 무음
+    let best: LogKind | null = null;
+    for (const e of state.log) {
+      if (e === prev) break;
+      if (!best || LOG_SOUND_PRIORITY[e.kind] > LOG_SOUND_PRIORITY[best]) best = e.kind;
+    }
+    if (best) playLogSound(best);
+  }, [state]);
 
   // PWA 설치 상태 감지 — 앱 모드로 실행 중이면 설치 버튼을 숨긴다
   useEffect(() => {
@@ -193,11 +239,22 @@ export default function Game() {
   }, []);
 
   const dispatch = useCallback((a: ActionId) => {
+    ensureAudio(); // 클릭 제스처 안에서 오디오 활성화 보장
     setState((s) => (s ? act(s, a, Date.now()) : s));
+  }, []);
+
+  const toggleMute = useCallback(() => {
+    ensureAudio();
+    const next = !isMuted();
+    setMuted(next);
+    setMutedUi(next);
+    if (!next) playTap();
   }, []);
 
   const brag = useCallback(async () => {
     if (!state) return;
+    ensureAudio();
+    playTap();
     const card = bragCard(state);
     try {
       await navigator.clipboard.writeText(card);
@@ -208,6 +265,8 @@ export default function Game() {
   }, [state, showToast]);
 
   const reset = useCallback(() => {
+    ensureAudio();
+    playTap();
     if (confirm("정말 처음부터 다시 키울까요? 지금 펫과는 작별입니다.")) {
       clearState();
       setState(null);
@@ -223,6 +282,8 @@ export default function Game() {
   }, []);
 
   const install = useCallback(async () => {
+    ensureAudio();
+    playTap();
     if (installEvt) {
       await installEvt.prompt();
       await installEvt.userChoice;
@@ -243,7 +304,15 @@ export default function Game() {
 
   if (!booted) return null;
   if (!state) {
-    return <Intro onStart={(name) => setState(initialState(name, Date.now()))} />;
+    return (
+      <Intro
+        onStart={(name) => {
+          ensureAudio();
+          playTap();
+          setState(initialState(name, Date.now()));
+        }}
+      />
+    );
   }
 
   const now = state.lastTick;
@@ -460,6 +529,9 @@ export default function Game() {
           KESSLER CLEANUP INITIATIVE <span className="text-[#2a3350]">v{APP_VERSION}</span>
         </span>
         <span className="flex gap-3">
+          <button onClick={toggleMute} aria-label={mutedUi ? "소리 켜기" : "소리 끄기"}>
+            {mutedUi ? "🔇" : "🔊"}
+          </button>
           {!installed && (
             <button onClick={install} className="underline">
               앱 설치
