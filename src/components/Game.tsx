@@ -181,9 +181,9 @@ export default function Game() {
   const nextStage = ORBIT_STAGES[state.stage + 1];
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-[420px] flex-col gap-2 px-3 pb-3 pt-4">
+    <main className="mx-auto flex h-dvh max-w-[420px] flex-col gap-2 overflow-y-auto px-3 pb-3 pt-4">
       {/* 헤더 */}
-      <header className="flex items-baseline justify-between px-1">
+      <header className="flex shrink-0 items-baseline justify-between px-1">
         <h1 className="text-sm tracking-widest text-[#7ee8a2]">STELLAPET</h1>
         <div className="text-right">
           <span className="text-base text-[#e8ecff]">{state.name}</span>
@@ -192,7 +192,7 @@ export default function Game() {
       </header>
 
       {/* 픽셀 뷰 */}
-      <div className="relative border-2 border-[#1c2440] bg-[#05060f]">
+      <div className="relative shrink-0 border-2 border-[#1c2440] bg-[#05060f]">
         <PixelView state={state} />
         {state.phase === "orbit" && (
           <div className="absolute left-2 top-2 text-[11px] leading-4 text-[#7dd3fc]">
@@ -208,7 +208,7 @@ export default function Game() {
       </div>
 
       {/* 상태 패널 */}
-      <section className="space-y-1.5 border-2 border-[#1c2440] bg-[#0b0f1e] p-3">
+      <section className="shrink-0 space-y-1.5 border-2 border-[#1c2440] bg-[#0b0f1e] p-3">
         {(state.phase === "egg" || state.phase === "ground" || state.phase === "awaiting") && (
           <>
             {state.phase === "egg" ? (
@@ -284,14 +284,14 @@ export default function Game() {
       {state.phase === "ground" && canLaunch(state) && (
         <button
           onClick={() => dispatch("register")}
-          className="pixel-btn-accent w-full py-3 text-[14px] blink"
+          className="pixel-btn-accent w-full shrink-0 py-3 text-[14px] blink"
         >
           🚀 라이드셰어 발사 등록 (다음 윈도우 탑승)
         </button>
       )}
 
       {/* 이벤트 로그 */}
-      <section className="min-h-[120px] flex-1 overflow-y-auto border-2 border-[#1c2440] bg-[#070a16] p-2.5">
+      <section className="min-h-[96px] flex-1 overflow-y-auto border-2 border-[#1c2440] bg-[#070a16] p-2.5">
         {state.log.map((e, i) => (
           <p key={`${e.t}-${i}`} className={`mb-1 text-[12px] leading-snug ${LOG_COLORS[e.kind]}`}>
             <span className="text-[#3a4468]">▸ </span>
@@ -301,7 +301,7 @@ export default function Game() {
       </section>
 
       {/* 액션 버튼 */}
-      <nav className="grid grid-cols-4 gap-2">
+      <nav className="grid shrink-0 grid-cols-4 gap-2">
         {state.phase === "egg" && (
           <div className="col-span-4">
             <ActionButton label="품어주기" icon="🥚" onClick={() => dispatch("incubate")} remainMs={cd("incubate")} />
@@ -331,7 +331,7 @@ export default function Game() {
       </nav>
 
       {/* 푸터 */}
-      <footer className="flex justify-between px-1 text-[10px] text-[#3a4468]">
+      <footer className="flex shrink-0 justify-between px-1 text-[10px] text-[#3a4468]">
         <span>KESSLER CLEANUP INITIATIVE</span>
         <button onClick={reset} className="underline">
           초기화
