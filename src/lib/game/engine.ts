@@ -146,6 +146,7 @@ export function initialState(name: string, now: number): GameState {
     meteorUntil: 0,
     flareUntil: 0,
     offer: null,
+    sortieBestKg: 0,
     cd: {},
     lastTick: now,
     log: [
@@ -394,6 +395,11 @@ export function settleSortie(prev: GameState, r: SortieOutcome, now: number): Ga
   // 직접 조종은 신난다 — 단, 부딪힌 만큼 깎인다
   s.mood = clamp(s.mood + 8 - r.hits * 3, 0, 100);
   pushLog(s, `🕹 수동 조종 복귀 — 잔해 ${r.eaten}개 직접 수거! (+${kg}kg)`, "gain");
+  if (kg > s.sortieBestKg) {
+    const hadPrev = s.sortieBestKg > 0;
+    s.sortieBestKg = kg;
+    if (hadPrev) pushLog(s, `🏆 수동 조종 신기록 경신 — 한 출격에 ${kg}kg!`, "evo");
+  }
   if (r.hits > 0) {
     pushLog(s, `기체에 긁힘 ${r.hits}회… 다음엔 파편을 조심하자`, "warn");
   }

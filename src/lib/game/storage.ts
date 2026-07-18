@@ -15,6 +15,7 @@ export function loadState(): GameState | null {
       meteorUntil: s.meteorUntil ?? 0,
       flareUntil: s.flareUntil ?? 0,
       offer: s.offer ?? null,
+      sortieBestKg: s.sortieBestKg ?? 0,
     } as GameState;
   } catch {
     return null;

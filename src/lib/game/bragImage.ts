@@ -2,12 +2,13 @@
 // bragImage.ts — 자랑 카드 이미지 생성 + 공유
 //
 // 오프스크린 캔버스에 1080×1080 픽셀 아트 카드를 그려 PNG로 뽑는다.
+// 카드 2종: 상태 카드(renderBragCard) / 수동 조종 스코어 카드(renderSortieCard).
 // 서버 없이 순수 클라이언트로 동작하며, 공유는 3단 폴백:
 //   Web Share(파일) → 클립보드(이미지) → 다운로드
 // ============================================================================
 
 import type { Branch, GameState } from "./types";
-import { bragCard, stageName } from "./engine";
+import { bragCard, SORTIE_MS, stageName } from "./engine";
 import { BABY, EGG, ORBIT_SPRITES, drawSprite, spriteH, spriteW, type Sprite } from "./sprites";
 
 const SIZE = 1080;
@@ -51,8 +52,17 @@ function cardStageLabel(s: GameState): string {
   return "아기 스텔라펫";
 }
 
-/** 자랑 카드를 그려 PNG Blob으로 반환한다 */
-export async function renderBragCard(s: GameState): Promise<Blob> {
+interface Card {
+  canvas: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D;
+  frame: string;
+  rand: () => number;
+  /** 중앙 정렬 텍스트 헬퍼 */
+  text: (str: string, y: number, size: number, color: string, weight?: number) => void;
+}
+
+/** 캔버스 준비 + 배경·별하늘·프레임·헤더까지 공통 크롬을 그린다 */
+async function makeCard(s: GameState, subtitle: string): Promise<Card> {
   // 픽셀 폰트가 로드된 뒤에 그린다 — 실패해도 시스템 폰트로 진행
   try {
     await Promise.all([
@@ -71,26 +81,17 @@ export async function renderBragCard(s: GameState): Promise<Blob> {
   ctx.imageSmoothingEnabled = false;
 
   const frame = s.phase === "orbit" ? FRAME_COLORS[s.branch] : FRAME_COLORS.balanced;
-  const days = Math.max(1, Math.ceil((s.lastTick - s.createdAt) / 86_400_000));
-
-  const text = (
-    str: string,
-    y: number,
-    size: number,
-    color: string,
-    weight = 700,
-    x = SIZE / 2,
-  ) => {
+  const rand = mulberry32(s.createdAt || 1);
+  const text: Card["text"] = (str, y, size, color, weight = 700) => {
     ctx.font = `${weight} ${size}px "Galmuri11", "Galmuri9", sans-serif`;
     ctx.fillStyle = color;
     ctx.textAlign = "center";
-    ctx.fillText(str, x, y);
+    ctx.fillText(str, SIZE / 2, y);
   };
 
-  // --- 배경: 우주 + 시드 고정 별하늘 ---
+  // 배경: 우주 + 시드 고정 별하늘
   ctx.fillStyle = "#05060f";
   ctx.fillRect(0, 0, SIZE, SIZE);
-  const rand = mulberry32(s.createdAt || 1);
   for (let i = 0; i < 70; i++) {
     const bright = rand() < 0.2;
     ctx.fillStyle = bright ? "#c7cde6" : "#3a4468";
@@ -98,7 +99,7 @@ export async function renderBragCard(s: GameState): Promise<Blob> {
     ctx.fillRect(Math.floor(rand() * SIZE), Math.floor(rand() * SIZE), d, d);
   }
 
-  // --- 계열 색 프레임 (이중 테두리) ---
+  // 계열 색 프레임 (이중 테두리)
   ctx.fillStyle = frame;
   ctx.fillRect(20, 20, SIZE - 40, 10);
   ctx.fillRect(20, SIZE - 30, SIZE - 40, 10);
@@ -110,11 +111,16 @@ export async function renderBragCard(s: GameState): Promise<Blob> {
   ctx.fillRect(38, 38, 3, SIZE - 76);
   ctx.fillRect(SIZE - 41, 38, 3, SIZE - 76);
 
-  // --- 헤더 ---
+  // 헤더
   text("STELLAPET", 136, 72, "#7ee8a2");
-  text(`MISSION REPORT — DAY ${days}`, 184, 28, "#8b93b5", 400);
+  text(subtitle, 184, 28, "#8b93b5", 400);
 
-  // --- 궤도 링 + 잔해 점 ---
+  return { canvas, ctx, frame, rand, text };
+}
+
+/** 궤도 링 + 잔해 점 + 대형 도트 펫 + 이름·형태 (공통 중앙부) */
+function drawPetBlock(card: Card, s: GameState) {
+  const { ctx, frame, rand, text } = card;
   const cx = SIZE / 2;
   const cy = 440;
   ctx.fillStyle = "#2a3350";
@@ -128,26 +134,33 @@ export async function renderBragCard(s: GameState): Promise<Blob> {
     ctx.fillRect(Math.round(cx + 340 * Math.cos(a)) - 5, Math.round(cy + 140 * Math.sin(a)) - 5, 10, 10);
   }
 
-  // --- 펫 스프라이트 (대형 도트) ---
   const sprite = cardSprite(s);
-  const sc = Math.min(
-    Math.floor(360 / spriteW(sprite)),
-    Math.floor(300 / spriteH(sprite)),
-  );
+  const sc = Math.min(Math.floor(360 / spriteW(sprite)), Math.floor(300 / spriteH(sprite)));
   const sw = spriteW(sprite) * sc;
   const sh = spriteH(sprite) * sc;
-  // 은은한 계열 색 후광
   ctx.globalAlpha = 0.12;
   ctx.fillStyle = frame;
   ctx.fillRect(cx - sw / 2 - 30, cy - sh / 2 - 30, sw + 60, sh + 60);
   ctx.globalAlpha = 1;
   drawSprite(ctx, sprite, Math.round(cx - sw / 2), Math.round(cy - sh / 2), sc);
 
-  // --- 이름 · 형태 ---
   text(s.name, 668, 58, "#e8ecff");
   text(`「 ${cardStageLabel(s)} 」`, 724, 40, frame);
+}
 
-  // --- 스탯 ---
+function toBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/png");
+  });
+}
+
+/** 상태 자랑 카드 (phase별 변형) */
+export async function renderBragCard(s: GameState): Promise<Blob> {
+  const days = Math.max(1, Math.ceil((s.lastTick - s.createdAt) / 86_400_000));
+  const card = await makeCard(s, `MISSION REPORT — DAY ${days}`);
+  const { text } = card;
+  drawPetBlock(card, s);
+
   if (s.phase === "orbit") {
     text("누적 수거량", 790, 28, "#8b93b5", 400);
     text(`${s.debrisKg.toLocaleString()}kg`, 862, 84, "#7ee8a2");
@@ -165,24 +178,40 @@ export async function renderBragCard(s: GameState): Promise<Blob> {
     text("발사 자격을 향해 무럭무럭 크는 중입니다", 962, 32, "#f4b860", 400);
   }
 
-  // --- 푸터 ---
   text("#스텔라펫  #케슬러신드롬청소반", 1022, 28, "#7dd3fc", 400);
-
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/png");
-  });
+  return toBlob(card.canvas);
 }
 
-/** 이미지 공유: Web Share → 클립보드 → 다운로드 순 폴백. 어떤 경로였는지 반환 */
-export async function shareBragImage(
+/** 수동 조종 신기록 스코어 카드 — 도전을 유도하는 카피 */
+export async function renderSortieCard(
   s: GameState,
+  r: { eaten: number; hits: number },
+): Promise<Blob> {
+  const sec = Math.round(SORTIE_MS / 1000);
+  const card = await makeCard(s, "MANUAL SORTIE — NEW RECORD");
+  const { text } = card;
+  drawPetBlock(card, s);
+
+  text(`${sec}초 수동 조종 수거량`, 790, 28, "#8b93b5", 400);
+  text(`${s.sortieBestKg.toLocaleString()}kg`, 862, 84, "#f4b860");
+  text(`잔해 ${r.eaten}개 · 피격 ${r.hits}회`, 912, 30, "#c7cde6", 400);
+  text("이 기록, 깰 수 있으면 깨 보시죠", 962, 32, "#7dd3fc", 400);
+
+  text("#스텔라펫  #수동조종챌린지", 1022, 28, "#7dd3fc", 400);
+  return toBlob(card.canvas);
+}
+
+/** 공유 3단 폴백: Web Share → 클립보드 → 다운로드. 어떤 경로였는지 반환 */
+async function shareBlob(
+  blob: Blob,
+  filename: string,
+  shareText: string,
 ): Promise<"shared" | "copied" | "downloaded"> {
-  const blob = await renderBragCard(s);
-  const file = new File([blob], `stellapet-${s.name}.png`, { type: "image/png" });
+  const file = new File([blob], filename, { type: "image/png" });
 
   if (typeof navigator.canShare === "function" && navigator.canShare({ files: [file] })) {
     try {
-      await navigator.share({ files: [file], text: bragCard(s) });
+      await navigator.share({ files: [file], text: shareText });
       return "shared";
     } catch (e) {
       // 사용자가 공유 시트를 닫은 경우 — 폴백을 강제하지 않는다
@@ -201,8 +230,28 @@ export async function shareBragImage(
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `stellapet-${s.name}.png`;
+  a.download = filename;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 3_000);
   return "downloaded";
+}
+
+export async function shareBragImage(
+  s: GameState,
+): Promise<"shared" | "copied" | "downloaded"> {
+  const blob = await renderBragCard(s);
+  return shareBlob(blob, `stellapet-${s.name}.png`, bragCard(s));
+}
+
+export async function shareSortieImage(
+  s: GameState,
+  r: { eaten: number; hits: number },
+): Promise<"shared" | "copied" | "downloaded"> {
+  const blob = await renderSortieCard(s, r);
+  const sec = Math.round(SORTIE_MS / 1000);
+  return shareBlob(
+    blob,
+    `stellapet-sortie-${s.name}.png`,
+    `🕹 STELLAPET 수동 조종 신기록 — ${sec}초에 ${s.sortieBestKg.toLocaleString()}kg 수거! 이 기록 깰 수 있어?\n#스텔라펫 #수동조종챌린지`,
+  );
 }

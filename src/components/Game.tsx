@@ -19,7 +19,7 @@ import {
   tick,
   type SortieOutcome,
 } from "@/lib/game/engine";
-import { shareBragImage } from "@/lib/game/bragImage";
+import { shareBragImage, shareSortieImage } from "@/lib/game/bragImage";
 import { clearState, loadState, saveState } from "@/lib/game/storage";
 import {
   ensureAudio,
@@ -42,6 +42,15 @@ interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
+
+/** 감정 고점 공유 프롬프트 — 자랑스러운 순간에 게임이 먼저 제안한다 */
+interface SharePrompt {
+  kind: "state" | "sortie";
+  label: string;
+}
+
+/** 공유 프롬프트를 띄우는 임무 일차 기념일 */
+const MILESTONE_DAYS = [7, 30, 100];
 
 const LOG_COLORS: Record<LogKind, string> = {
   info: "text-[#c7cde6]",
@@ -154,6 +163,16 @@ export default function Game() {
   const sortieRef = useRef(false);
   sortieRef.current = sortie;
   const [mutedUi, setMutedUi] = useState(false);
+  const [sharePrompt, setSharePrompt] = useState<SharePrompt | null>(null);
+  const promptTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** 마지막 수동 조종 결과 — 신기록 스코어 카드에 쓴다 */
+  const lastSortieRef = useRef<{ eaten: number; hits: number } | null>(null);
+
+  const showSharePrompt = useCallback((p: SharePrompt) => {
+    setSharePrompt(p);
+    if (promptTimer.current) clearTimeout(promptTimer.current);
+    promptTimer.current = setTimeout(() => setSharePrompt(null), 12_000);
+  }, []);
 
   // 사운드 초기화: 뮤트 설정 로드 + 첫 제스처에서 오디오 언락
   useEffect(() => {
@@ -162,13 +181,15 @@ export default function Game() {
     initAudioListener();
   }, []);
 
-  // 새 이벤트 로그 → kind별 효과음 (게임 전 분야 공통 사운드 훅)
+  // 새 이벤트 로그 → 효과음 + 감정 고점 공유 프롬프트 (게임 전 분야 공통 훅)
   const prevLogRef = useRef<LogEntry | null | undefined>(undefined);
   const prevPhaseRef = useRef<GameState["phase"] | null>(null);
+  const prevDaysRef = useRef<number | null>(null);
   useEffect(() => {
     if (!state) {
       prevLogRef.current = undefined;
       prevPhaseRef.current = null;
+      prevDaysRef.current = null;
       return;
     }
     // 발사 순간은 로그 매핑 대신 전용 럼블
@@ -177,17 +198,45 @@ export default function Game() {
     }
     prevPhaseRef.current = state.phase;
 
+    // 임무 일차 (세션 중 기념일 도달 감지용)
+    const days = Math.max(1, Math.ceil((state.lastTick - state.createdAt) / 86_400_000));
+    const prevDays = prevDaysRef.current;
+    prevDaysRef.current = days;
+
     const first = state.log[0];
     const prev = prevLogRef.current;
     prevLogRef.current = first;
-    if (prev === undefined || !first || first === prev) return; // 부팅 직후엔 무음
+    if (prev === undefined) return; // 부팅 직후엔 무음·무프롬프트
+
+    // 이번 렌더에서 새로 추가된 로그 수집
+    const fresh: LogEntry[] = [];
+    if (first && first !== prev) {
+      for (const e of state.log) {
+        if (e === prev) break;
+        fresh.push(e);
+      }
+    }
+
+    // 효과음: 우선순위 최상위 kind 하나만
     let best: LogKind | null = null;
-    for (const e of state.log) {
-      if (e === prev) break;
+    for (const e of fresh) {
       if (!best || LOG_SOUND_PRIORITY[e.kind] > LOG_SOUND_PRIORITY[best]) best = e.kind;
     }
     if (best) playLogSound(best);
-  }, [state]);
+
+    // 공유 프롬프트: 신기록 > 진화 > 대형 잔해 견인 > 기념일
+    let prompt: SharePrompt | null = null;
+    if (fresh.some((e) => e.msg.startsWith("🏆"))) {
+      prompt = { kind: "sortie", label: "수동 조종 신기록 달성!" };
+    } else if (fresh.some((e) => e.msg.startsWith("✨ 진화!"))) {
+      prompt = { kind: "state", label: `「${stageName(state)}」(으)로 진화 성공!` };
+    } else if (fresh.some((e) => e.kind === "gain" && e.msg.startsWith("🪝"))) {
+      prompt = { kind: "state", label: "대형 잔해 견인 성공!" };
+    } else if (prevDays !== null && prevDays !== days && MILESTONE_DAYS.includes(days)) {
+      prompt = { kind: "state", label: `임무 ${days}일차 달성!` };
+    }
+    if (prompt) showSharePrompt(prompt);
+  }, [state, showSharePrompt]);
 
   // PWA 설치 상태 감지 — 앱 모드로 실행 중이면 설치 버튼을 숨긴다
   useEffect(() => {
@@ -244,6 +293,24 @@ export default function Game() {
     setState((s) => (s ? act(s, a, Date.now()) : s));
   }, []);
 
+  const shareFromPrompt = useCallback(async () => {
+    if (!state || !sharePrompt) return;
+    ensureAudio();
+    playTap();
+    const p = sharePrompt;
+    setSharePrompt(null);
+    try {
+      const how =
+        p.kind === "sortie"
+          ? await shareSortieImage(state, lastSortieRef.current ?? { eaten: 0, hits: 0 })
+          : await shareBragImage(state);
+      if (how === "copied") showToast("📸 카드 이미지가 클립보드에 복사됐어요!");
+      else if (how === "downloaded") showToast("📸 카드 이미지를 저장했어요!");
+    } catch {
+      showToast("카드 생성에 실패했어요 😢");
+    }
+  }, [state, sharePrompt, showToast]);
+
   const toggleMute = useCallback(() => {
     ensureAudio();
     const next = !isMuted();
@@ -282,6 +349,7 @@ export default function Game() {
 
   const endSortie = useCallback((r: SortieOutcome) => {
     setSortie(false);
+    lastSortieRef.current = { eaten: r.eaten, hits: r.hits };
     setState((s) => (s ? settleSortie(s, r, Date.now()) : s));
     if (document.fullscreenElement) {
       document.exitFullscreen().catch(() => {});
@@ -472,6 +540,25 @@ export default function Game() {
           🪝 {state.offer.name} 견인! (약 {state.offer.kg}kg · 추진제 -{SALVAGE_PROP_COST}) ·{" "}
           {Math.ceil(Math.max(0, state.offer.expiresAt - now) / 1000)}s
         </button>
+      )}
+
+      {/* 감정 고점 공유 프롬프트 */}
+      {sharePrompt && !sortie && (
+        <div className="flex shrink-0 items-center gap-2 border-2 border-[#f4b860] bg-[#0b0f1e] py-2 pl-3 pr-2 text-[12px]">
+          <span className="flex-1 leading-snug text-[#f4b860]">
+            📸 {sharePrompt.label} 카드로 자랑해 볼까요?
+          </span>
+          <button onClick={shareFromPrompt} className="pixel-btn-accent shrink-0 px-2.5 py-2 text-[12px]">
+            카드 만들기
+          </button>
+          <button
+            onClick={() => setSharePrompt(null)}
+            className="shrink-0 px-1 text-[#5a6284]"
+            aria-label="닫기"
+          >
+            ✕
+          </button>
+        </div>
       )}
 
       {/* 이벤트 로그 */}

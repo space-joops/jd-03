@@ -56,6 +56,9 @@ export interface GameState {
   flareUntil: number;
   offer: DebrisOffer | null;
 
+  /** 수동 조종 한 출격 최고 수거량 (정산 kg 기준) */
+  sortieBestKg: number;
+
   /** 액션별 쿨다운 만료 시각 */
   cd: Record<string, number>;
   lastTick: number;
