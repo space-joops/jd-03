@@ -9,7 +9,16 @@
 import { ImageResponse } from "next/og";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { STAGE_NAMES } from "@/lib/game/engine";
 import { ORBIT_SPRITES, type Sprite } from "@/lib/game/sprites";
+import type { Branch } from "@/lib/game/types";
+
+/** 계열별 강조색 — 클라이언트 카드의 프레임 색과 동일 */
+const BRANCH_COLORS: Record<Branch, string> = {
+  balanced: "#7ee8a2",
+  speed: "#7dd3fc",
+  pull: "#c4b5fd",
+};
 
 let fontCache: Buffer | null = null;
 async function loadFont(): Promise<Buffer> {
@@ -53,6 +62,12 @@ export async function GET(req: Request) {
   const kg = Math.min(999_999, Math.max(0, Math.round(Number(searchParams.get("kg")) || 0)));
   const name = (searchParams.get("n") || "누군가").slice(0, 10);
   const hasRecord = kg > 0;
+  // 도전자의 현재 캐릭터 — 스프라이트·형태명·계열색이 미리보기에 그대로 반영된다
+  const stage = Math.min(3, Math.max(0, Math.round(Number(searchParams.get("s") ?? 1) || 0)));
+  const rawBranch = searchParams.get("b");
+  const branch: Branch = rawBranch === "speed" || rawBranch === "pull" ? rawBranch : "balanced";
+  const stageLabel = STAGE_NAMES[branch][stage];
+  const branchColor = BRANCH_COLORS[branch];
 
   const font = await loadFont();
 
@@ -95,10 +110,27 @@ export async function GET(req: Request) {
           <div style={{ display: "flex", fontSize: 34, color: "#7ee8a2" }}>
             🛰 STELLAPET — 궤도 청소 다마고치
           </div>
-          <div style={{ display: "flex", fontSize: 46, color: "#e8ecff", marginTop: 34 }}>
-            {hasRecord ? `${name}의 스텔라펫이` : "우주 쓰레기를 먹는 스텔라펫"}
+          <div style={{ display: "flex", alignItems: "baseline", fontSize: 46, marginTop: 34 }}>
+            {hasRecord ? (
+              <>
+                <span style={{ color: "#e8ecff" }}>{name}</span>
+                <span style={{ color: branchColor, fontSize: 38, marginLeft: 18 }}>
+                  「{stageLabel}」
+                </span>
+              </>
+            ) : (
+              <span style={{ color: "#e8ecff" }}>우주 쓰레기를 먹는 스텔라펫</span>
+            )}
           </div>
-          <div style={{ display: "flex", fontSize: 72, color: "#f4b860", marginTop: 14 }}>
+          <div
+            style={{
+              display: "flex",
+              // 자릿수가 커져도 한 줄 유지 (텍스트 영역 폭 ~740px)
+              fontSize: kg >= 10_000 ? 54 : kg >= 1_000 ? 62 : 72,
+              color: "#f4b860",
+              marginTop: 14,
+            }}
+          >
             {hasRecord ? `30초에 ${kg.toLocaleString()}kg 수거!` : "궤도 청소 대결에 초대!"}
           </div>
           <div style={{ display: "flex", fontSize: 30, color: "#8b93b5", marginTop: 30 }}>
@@ -116,7 +148,7 @@ export async function GET(req: Request) {
             width: 360,
           }}
         >
-          <SpriteBox sprite={ORBIT_SPRITES[1]} cell={17} />
+          <SpriteBox sprite={ORBIT_SPRITES[Math.min(stage, ORBIT_SPRITES.length - 1)]} cell={17} />
         </div>
       </div>
     ),

@@ -15,10 +15,13 @@ export async function generateMetadata({ searchParams }: { searchParams: Search 
   const p = await searchParams;
   const kg = Math.min(999_999, Math.max(0, Math.round(Number(p.kg) || 0)));
   const name = String(p.n ?? "누군가").slice(0, 10);
+  // 도전자의 현재 캐릭터(진화 단계·계열) — 미리보기 이미지에 반영된다
+  const stage = Math.min(3, Math.max(0, Math.round(Number(p.s ?? 1) || 0)));
+  const branch = p.b === "speed" || p.b === "pull" ? p.b : "balanced";
   const title =
     kg > 0 ? `${name}의 스텔라펫 — 30초에 ${kg.toLocaleString()}kg 수거!` : "STELLAPET 도전장";
   const description = "이 기록, 깰 수 있으면 깨 보시죠. 가입 없이 바로 도전 출격!";
-  const og = `/api/og?kg=${kg}&n=${encodeURIComponent(name)}`;
+  const og = `/api/og?kg=${kg}&n=${encodeURIComponent(name)}&s=${stage}&b=${branch}`;
   return {
     title,
     description,
