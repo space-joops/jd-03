@@ -49,7 +49,20 @@ export const COOLDOWNS: Record<string, number> = {
   boost: 25_000,
   comm: 20_000,
   supply: 90_000,
+  sortie: 60_000,
 };
+
+/** 수동 조종 출격 (미니게임) */
+export const SORTIE_MS = 30_000;
+export const SORTIE_PROP_COST = 5;
+
+/** 미니게임 결과 — settleSortie로 본편에 정산한다 */
+export interface SortieOutcome {
+  /** 미니게임에서 먹은 원시 kg (배율 적용 전) */
+  kg: number;
+  eaten: number;
+  hits: number;
+}
 
 /** 궤도 이벤트 지속시간 */
 export const METEOR_MS = 45_000;
@@ -368,7 +381,25 @@ export type ActionId =
   | "boost"
   | "comm"
   | "supply"
-  | "salvage";
+  | "salvage"
+  | "sortie";
+
+/** 수동 조종 결과 정산: 수거량 반영(본편과 같은 배율) + 기분 변화 + 진화 체크 */
+export function settleSortie(prev: GameState, r: SortieOutcome, now: number): GameState {
+  const s: GameState = { ...prev, cd: { ...prev.cd }, log: [...prev.log] };
+  s.lastTick = now;
+  const kg = Math.round(r.kg * (1 + s.pull * 0.08) * yieldMult(s));
+  s.debrisKg += kg;
+  s.totalEncounters += r.eaten;
+  // 직접 조종은 신난다 — 단, 부딪힌 만큼 깎인다
+  s.mood = clamp(s.mood + 8 - r.hits * 3, 0, 100);
+  pushLog(s, `🕹 수동 조종 복귀 — 잔해 ${r.eaten}개 직접 수거! (+${kg}kg)`, "gain");
+  if (r.hits > 0) {
+    pushLog(s, `기체에 긁힘 ${r.hits}회… 다음엔 파편을 조심하자`, "warn");
+  }
+  checkEvolution(s);
+  return s;
+}
 
 /** 유저 액션 적용. 실패하면 원본 상태를 그대로 반환한다. */
 export function act(prev: GameState, action: ActionId, now: number): GameState {
@@ -455,6 +486,17 @@ export function act(prev: GameState, action: ActionId, now: number): GameState {
       s.prop += refill;
       setCd();
       pushLog(s, `📦 보급 캡슐 도킹 성공 — 추진제 +${Math.round(refill)}`, "gain");
+      return s;
+    }
+    case "sortie": {
+      if (s.phase !== "orbit") return prev;
+      if (s.prop < SORTIE_PROP_COST) {
+        pushLog(s, "추진제가 부족해 수동 조종을 할 수 없다… (보급 필요)", "warn");
+        return s;
+      }
+      s.prop -= SORTIE_PROP_COST;
+      setCd();
+      pushLog(s, "🕹 수동 조종 모드 진입 — 30초간 직접 기동해 잔해를 수거하자!", "sys");
       return s;
     }
     case "salvage": {

@@ -13,11 +13,15 @@ import {
   LAUNCH_MIN_WEIGHT,
   ORBIT_STAGES,
   SALVAGE_PROP_COST,
+  settleSortie,
+  SORTIE_PROP_COST,
   stageName,
   tick,
+  type SortieOutcome,
 } from "@/lib/game/engine";
 import { clearState, loadState, saveState } from "@/lib/game/storage";
 import PixelView from "./PixelView";
+import SortieGame from "./SortieGame";
 
 const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION ?? "dev";
 
@@ -134,6 +138,9 @@ export default function Game() {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [installEvt, setInstallEvt] = useState<BeforeInstallPromptEvent | null>(null);
   const [installed, setInstalled] = useState(false);
+  const [sortie, setSortie] = useState(false);
+  const sortieRef = useRef(false);
+  sortieRef.current = sortie;
 
   // PWA 설치 상태 감지 — 앱 모드로 실행 중이면 설치 버튼을 숨긴다
   useEffect(() => {
@@ -166,10 +173,10 @@ export default function Game() {
     setBooted(true);
   }, []);
 
-  // 1초 게임 틱
+  // 1초 게임 틱 — 수동 조종 중에는 본편 진행을 멈춘다 (이중 수거 방지)
   useEffect(() => {
     const id = setInterval(() => {
-      setState((s) => (s ? tick(s, Date.now()) : s));
+      setState((s) => (s && !sortieRef.current ? tick(s, Date.now()) : s));
     }, 1000);
     return () => clearInterval(id);
   }, []);
@@ -207,6 +214,11 @@ export default function Game() {
     }
   }, []);
 
+  const endSortie = useCallback((r: SortieOutcome) => {
+    setSortie(false);
+    setState((s) => (s ? settleSortie(s, r, Date.now()) : s));
+  }, []);
+
   const install = useCallback(async () => {
     if (installEvt) {
       await installEvt.prompt();
@@ -235,6 +247,13 @@ export default function Game() {
   const cd = (a: string) => Math.max(0, (state.cd[a] ?? 0) - now);
   const nextStage = ORBIT_STAGES[state.stage + 1];
 
+  const startSortie = () => {
+    if (state.phase !== "orbit" || sortie) return;
+    if (cd("sortie") > 0 || state.prop < SORTIE_PROP_COST) return;
+    dispatch("sortie");
+    setSortie(true);
+  };
+
   return (
     <main className="mx-auto flex h-dvh max-w-[420px] flex-col gap-2 overflow-y-auto px-3 pb-3 pt-4">
       {/* 헤더 */}
@@ -246,10 +265,14 @@ export default function Game() {
         </div>
       </header>
 
-      {/* 픽셀 뷰 */}
+      {/* 픽셀 뷰 (수동 조종 중에는 미니게임으로 전환) */}
       <div className="relative shrink-0 border-2 border-[#1c2440] bg-[#05060f]">
-        <PixelView state={state} />
-        {state.phase === "orbit" && (
+        {sortie && state.phase === "orbit" ? (
+          <SortieGame state={state} onEnd={endSortie} />
+        ) : (
+          <PixelView state={state} />
+        )}
+        {state.phase === "orbit" && !sortie && (
           <div className="absolute left-2 top-2 text-[11px] leading-4 text-[#7dd3fc]">
             <div>ALT 550km</div>
             <div className="text-[#7ee8a2]">{state.debrisKg.toLocaleString()}kg 수거</div>
@@ -356,7 +379,7 @@ export default function Game() {
       )}
 
       {/* 대형 잔해 견인 배너 */}
-      {state.phase === "orbit" && state.offer && (
+      {state.phase === "orbit" && state.offer && !sortie && (
         <button
           onClick={() => dispatch("salvage")}
           disabled={state.prop < SALVAGE_PROP_COST}
@@ -378,7 +401,11 @@ export default function Game() {
       </section>
 
       {/* 액션 버튼 */}
-      <nav className="grid shrink-0 grid-cols-4 gap-2">
+      <nav
+        className={`grid shrink-0 gap-2 ${
+          state.phase === "orbit" && !sortie ? "grid-cols-5" : "grid-cols-4"
+        }`}
+      >
         {state.phase === "egg" && (
           <div className="col-span-4">
             <ActionButton label="품어주기" icon="🥚" onClick={() => dispatch("incubate")} remainMs={cd("incubate")} />
@@ -397,8 +424,20 @@ export default function Game() {
             관제탑에 모든 것을 맡기세요…
           </p>
         )}
-        {state.phase === "orbit" && (
+        {state.phase === "orbit" && sortie && (
+          <p className="col-span-4 py-3 text-center text-[12px] text-[#8b93b5]">
+            🕹 드래그로 펫을 조종해 잔해를 먹어치우자!
+          </p>
+        )}
+        {state.phase === "orbit" && !sortie && (
           <>
+            <ActionButton
+              label="조종"
+              icon="🕹"
+              onClick={startSortie}
+              remainMs={cd("sortie")}
+              disabled={state.prop < SORTIE_PROP_COST}
+            />
             <ActionButton label="부스트" icon="🔥" onClick={() => dispatch("boost")} remainMs={cd("boost")} />
             <ActionButton label="교신" icon="📡" onClick={() => dispatch("comm")} remainMs={cd("comm")} />
             <ActionButton label="보급" icon="📦" onClick={() => dispatch("supply")} remainMs={cd("supply")} />
