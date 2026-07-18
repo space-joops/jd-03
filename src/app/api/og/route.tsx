@@ -131,7 +131,7 @@ export async function GET(req: Request) {
               marginTop: 14,
             }}
           >
-            {hasRecord ? `30초에 ${kg.toLocaleString()}kg 수거!` : "궤도 청소 대결에 초대!"}
+            {hasRecord ? `한 출격에 ${kg.toLocaleString()}kg 수거!` : "궤도 청소 대결에 초대!"}
           </div>
           <div style={{ display: "flex", fontSize: 30, color: "#8b93b5", marginTop: 30 }}>
             이 기록, 깰 수 있으면 깨 보시죠 — 가입 없이 바로 도전

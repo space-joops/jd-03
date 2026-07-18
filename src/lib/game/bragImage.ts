@@ -8,7 +8,7 @@
 // ============================================================================
 
 import type { Branch, GameState } from "./types";
-import { bragCard, SORTIE_MS, stageName } from "./engine";
+import { bragCard, stageName } from "./engine";
 import { BABY, EGG, ORBIT_SPRITES, drawSprite, spriteH, spriteW, type Sprite } from "./sprites";
 
 const SIZE = 1080;
@@ -213,48 +213,66 @@ export async function renderBragCard(s: GameState): Promise<Blob> {
 /** 수동 조종 신기록 스코어 카드 — 도전을 유도하는 카피 */
 export async function renderSortieCard(
   s: GameState,
-  r: { eaten: number; hits: number },
+  r: { eaten: number; hits: number; sec?: number },
 ): Promise<Blob> {
-  const sec = Math.round(SORTIE_MS / 1000);
   const card = await makeCard(s, "MANUAL SORTIE — NEW RECORD");
   const { text } = card;
   await drawQr(card, challengeUrl(s)); // QR로 접속하면 바로 도전 출격
   drawPetBlock(card, s);
 
-  text(`${sec}초 수동 조종 수거량`, 790, 28, "#8b93b5", 400);
+  text("한 출격 수거량 (연료 서바이벌)", 790, 28, "#8b93b5", 400);
   text(`${s.sortieBestKg.toLocaleString()}kg`, 862, 84, "#f4b860");
-  text(`잔해 ${r.eaten}개 · 피격 ${r.hits}회`, 912, 30, "#c7cde6", 400);
+  text(
+    `${r.sec ? `${r.sec}초 비행 · ` : ""}잔해 ${r.eaten}개 · 피격 ${r.hits}회`,
+    912,
+    30,
+    "#c7cde6",
+    400,
+  );
   text("이 기록, 깰 수 있으면 깨 보시죠", 962, 32, "#7dd3fc", 400);
 
   text("#스텔라펫  #수동조종챌린지", 1022, 28, "#7dd3fc", 400);
   return toBlob(card.canvas);
 }
 
+export type RankBoard = "weekly" | "best" | "total";
+
+const RANK_BOARD_LABELS: Record<RankBoard, { subtitle: string; label: string; value: (s: GameState) => string }> = {
+  weekly: {
+    subtitle: "WEEKLY RANKING",
+    label: "이번 주 수동 조종 신기록 순위",
+    value: (s) => `주간 최고 ${s.sortieWeekBestKg.toLocaleString()}kg`,
+  },
+  best: {
+    subtitle: "ALL-TIME SORTIE RANKING",
+    label: "역대 단판(한 출격) 순위",
+    value: (s) => `단판 최고 ${s.sortieBestKg.toLocaleString()}kg`,
+  },
+  total: {
+    subtitle: "ALL-TIME RANKING",
+    label: "누적 수거량 순위",
+    value: (s) => `누적 ${s.debrisKg.toLocaleString()}kg`,
+  },
+};
+
 /** 리더보드 랭크 카드 — 공유 시점의 순위를 박제한다 */
 export async function renderRankCard(
   s: GameState,
   rank: number,
-  board: "weekly" | "total",
+  board: RankBoard,
 ): Promise<Blob> {
+  const meta = RANK_BOARD_LABELS[board];
   const card = await makeCard(
     s,
-    board === "weekly" ? `WEEKLY RANKING — ${s.sortieWeek || "이번 주"}` : "ALL-TIME RANKING",
+    board === "weekly" ? `${meta.subtitle} — ${s.sortieWeek || "이번 주"}` : meta.subtitle,
   );
   const { text } = card;
   await drawQr(card, `${window.location.origin}/rank`);
   drawPetBlock(card, s);
 
-  text(board === "weekly" ? "이번 주 수동 조종 신기록 순위" : "누적 수거량 순위", 790, 28, "#8b93b5", 400);
+  text(meta.label, 790, 28, "#8b93b5", 400);
   text(`#${rank}`, 866, 96, "#ffd166");
-  text(
-    board === "weekly"
-      ? `주간 최고 ${s.sortieWeekBestKg.toLocaleString()}kg`
-      : `누적 ${s.debrisKg.toLocaleString()}kg`,
-    916,
-    32,
-    "#c7cde6",
-    400,
-  );
+  text(meta.value(s), 916, 32, "#c7cde6", 400);
   text("리더보드에서 나를 이겨보시죠", 962, 32, "#7dd3fc", 400);
 
   text("#스텔라펫  #궤도청소리더보드", 1022, 28, "#7dd3fc", 400);
@@ -264,10 +282,10 @@ export async function renderRankCard(
 export async function shareRankImage(
   s: GameState,
   rank: number,
-  board: "weekly" | "total",
+  board: RankBoard,
 ): Promise<"shared" | "copied" | "downloaded"> {
   const blob = await renderRankCard(s, rank, board);
-  const label = board === "weekly" ? "이번 주 신기록" : "누적 수거량";
+  const label = board === "weekly" ? "이번 주 신기록" : board === "best" ? "역대 단판" : "누적 수거량";
   return shareBlob(
     blob,
     `stellapet-rank-${s.name}.png`,
@@ -319,13 +337,12 @@ export async function shareBragImage(
 
 export async function shareSortieImage(
   s: GameState,
-  r: { eaten: number; hits: number },
+  r: { eaten: number; hits: number; sec?: number },
 ): Promise<"shared" | "copied" | "downloaded"> {
   const blob = await renderSortieCard(s, r);
-  const sec = Math.round(SORTIE_MS / 1000);
   return shareBlob(
     blob,
     `stellapet-sortie-${s.name}.png`,
-    `🕹 STELLAPET 수동 조종 신기록 — ${sec}초에 ${s.sortieBestKg.toLocaleString()}kg 수거! 이 기록 깰 수 있어?\n${challengeUrl(s)}\n#스텔라펫 #수동조종챌린지`,
+    `🕹 STELLAPET 수동 조종 신기록 — 한 출격에 ${s.sortieBestKg.toLocaleString()}kg 수거! 이 기록 깰 수 있어?\n${challengeUrl(s)}\n#스텔라펫 #수동조종챌린지`,
   );
 }

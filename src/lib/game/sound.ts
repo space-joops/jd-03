@@ -202,6 +202,18 @@ export function playHit(): void {
   chirp("square", 200, 50, 0.25, 0.07);
 }
 
+/** 연료 셀 획득: 파워업 아르페지오 (jd-02 fuelUp) */
+export function playFuelUp(): void {
+  const notes = [261, 329, 392, 523, 659, 783];
+  notes.forEach((f, i) => chirp("square", f, f, 0.1, 0.035, i * 0.04));
+}
+
+/** 연료 소진: 시동 꺼지는 하강음 */
+export function playFuelEmpty(): void {
+  chirp("sawtooth", 330, 110, 0.35, 0.06);
+  chirp("square", 392, 130, 0.4, 0.04, 0.05);
+}
+
 /** 출격: 상승 휘리릭 */
 export function playSortieStart(): void {
   chirp("sawtooth", 180, 620, 0.35, 0.05);

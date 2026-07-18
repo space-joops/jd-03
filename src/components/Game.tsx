@@ -155,8 +155,8 @@ function Intro({
       {challenge && !demoResult && (
         <div className="space-y-2 border-2 border-[#f4b860] bg-[#0b0f1e] p-4 text-[13px] leading-relaxed">
           <p className="text-[#f4b860]">
-            🕹 도전장 도착! <span className="text-[#e8ecff]">{challenge.name}</span>의 스텔라펫이
-            30초에 <span className="text-base">{challenge.kg.toLocaleString()}kg</span>을 수거했습니다.
+            🕹 도전장 도착! <span className="text-[#e8ecff]">{challenge.name}</span>의 스텔라펫이 한
+            출격에 <span className="text-base">{challenge.kg.toLocaleString()}kg</span>을 수거했습니다.
           </p>
           <button onClick={onChallenge} className="pixel-btn-accent w-full py-2.5 text-[13px] blink">
             🚀 지금 바로 도전 출격 (가입 불필요)
@@ -230,7 +230,7 @@ export default function Game() {
   const [sharePrompt, setSharePrompt] = useState<SharePrompt | null>(null);
   const promptTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** 마지막 수동 조종 결과 — 신기록 스코어 카드에 쓴다 */
-  const lastSortieRef = useRef<{ eaten: number; hits: number } | null>(null);
+  const lastSortieRef = useRef<{ eaten: number; hits: number; sec: number } | null>(null);
 
   const showSharePrompt = useCallback((p: SharePrompt) => {
     setSharePrompt(p);
@@ -403,7 +403,7 @@ export default function Game() {
   useEffect(() => {
     if (challenge && state && !challengeToastShown.current) {
       challengeToastShown.current = true;
-      showToast(`🕹 ${challenge.name}의 도전장: 30초에 ${challenge.kg.toLocaleString()}kg — 조종으로 넘어보자!`);
+      showToast(`🕹 ${challenge.name}의 도전장: 한 출격 ${challenge.kg.toLocaleString()}kg — 조종으로 넘어보자!`);
     }
   }, [challenge, state, showToast]);
 
@@ -426,7 +426,7 @@ export default function Game() {
     try {
       const how =
         p.kind === "sortie"
-          ? await shareSortieImage(state, lastSortieRef.current ?? { eaten: 0, hits: 0 })
+          ? await shareSortieImage(state, lastSortieRef.current ?? { eaten: 0, hits: 0, sec: 0 })
           : await shareBragImage(state);
       if (how === "copied") showToast("📸 카드 이미지가 클립보드에 복사됐어요!");
       else if (how === "downloaded") showToast("📸 카드 이미지를 저장했어요!");
@@ -473,7 +473,7 @@ export default function Game() {
 
   const endSortie = useCallback((r: SortieOutcome) => {
     setSortie(false);
-    lastSortieRef.current = { eaten: r.eaten, hits: r.hits };
+    lastSortieRef.current = { eaten: r.eaten, hits: r.hits, sec: r.sec };
     setState((s) => (s ? settleSortie(s, r, Date.now()) : s));
     if (document.fullscreenElement) {
       document.exitFullscreen().catch(() => {});

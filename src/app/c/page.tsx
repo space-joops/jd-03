@@ -19,7 +19,7 @@ export async function generateMetadata({ searchParams }: { searchParams: Search 
   const stage = Math.min(3, Math.max(0, Math.round(Number(p.s ?? 1) || 0)));
   const branch = p.b === "speed" || p.b === "pull" ? p.b : "balanced";
   const title =
-    kg > 0 ? `${name}의 스텔라펫 — 30초에 ${kg.toLocaleString()}kg 수거!` : "STELLAPET 도전장";
+    kg > 0 ? `${name}의 스텔라펫 — 한 출격에 ${kg.toLocaleString()}kg 수거!` : "STELLAPET 도전장";
   const description = "이 기록, 깰 수 있으면 깨 보시죠. 가입 없이 바로 도전 출격!";
   const og = `/api/og?kg=${kg}&n=${encodeURIComponent(name)}&s=${stage}&b=${branch}`;
   return {

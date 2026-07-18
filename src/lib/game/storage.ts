@@ -15,9 +15,12 @@ export function loadState(): GameState | null {
       meteorUntil: s.meteorUntil ?? 0,
       flareUntil: s.flareUntil ?? 0,
       offer: s.offer ?? null,
-      sortieBestKg: s.sortieBestKg ?? 0,
-      sortieWeek: s.sortieWeek ?? "",
-      sortieWeekBestKg: s.sortieWeekBestKg ?? 0,
+      // 조종 모드 개편(연료 서바이벌 = 2세대) — 이전 세대의 30초 기록은 비교
+      // 불가능하므로 리셋한다
+      sortieBestKg: (s.sortieGen ?? 1) >= 2 ? (s.sortieBestKg ?? 0) : 0,
+      sortieWeek: (s.sortieGen ?? 1) >= 2 ? (s.sortieWeek ?? "") : "",
+      sortieWeekBestKg: (s.sortieGen ?? 1) >= 2 ? (s.sortieWeekBestKg ?? 0) : 0,
+      sortieGen: 2,
     } as GameState;
   } catch {
     return null;

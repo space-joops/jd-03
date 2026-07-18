@@ -61,6 +61,8 @@ export interface GameState {
   /** 주간 신기록 (리더보드용) — 해당 주차 키와 그 주의 최고 기록 */
   sortieWeek: string;
   sortieWeekBestKg: number;
+  /** 수동 조종 기록 세대 — 1: 30초 타임어택, 2: 연료 서바이벌. 세대가 다르면 기록 리셋 */
+  sortieGen: number;
 
   /** 액션별 쿨다운 만료 시각 */
   cd: Record<string, number>;

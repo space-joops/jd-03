@@ -156,6 +156,19 @@ export async function fetchWeeklyTop(limit = 50): Promise<LbWeeklyRow[]> {
   }));
 }
 
+/** 역대 단판(한 출격) TOP N — sortie_best_kg 정렬 */
+export async function fetchBestTop(limit = 50): Promise<LbPet[]> {
+  const sb = await getSb();
+  if (!sb) return [];
+  const { data, error } = await sb
+    .from("jd03_pets")
+    .select(PET_COLS)
+    .gt("sortie_best_kg", 0)
+    .order("sortie_best_kg", { ascending: false })
+    .limit(limit);
+  return error || !data ? [] : (data as unknown as LbPet[]);
+}
+
 /** 누적 수거량 TOP N */
 export async function fetchTotalTop(limit = 50): Promise<LbPet[]> {
   const sb = await getSb();
@@ -180,13 +193,17 @@ export async function fetchHallOfFame(limit = 26): Promise<LbHallRow[]> {
   return error || !data ? [] : (data as unknown as LbHallRow[]);
 }
 
+export interface MyRanks {
+  weekly: number | null;
+  best: number | null;
+  total: number | null;
+}
+
 /** 내 순위 — 나보다 좋은 기록 수 + 1 (내 행이 동기화돼 있어야 유효) */
-export async function fetchMyRanks(
-  s: GameState,
-): Promise<{ weekly: number | null; total: number | null }> {
+export async function fetchMyRanks(s: GameState): Promise<MyRanks> {
+  const out: MyRanks = { weekly: null, best: null, total: null };
   const sb = await getSb();
-  if (!sb) return { weekly: null, total: null };
-  const out: { weekly: number | null; total: number | null } = { weekly: null, total: null };
+  if (!sb) return out;
   try {
     const wk = weekKey(Date.now());
     if (s.sortieWeekBestKg > 0 && s.sortieWeek === wk) {
@@ -196,6 +213,13 @@ export async function fetchMyRanks(
         .eq("week", wk)
         .gt("best_kg", s.sortieWeekBestKg);
       if (!error && count !== null) out.weekly = count + 1;
+    }
+    if (s.sortieBestKg > 0) {
+      const { count, error } = await sb
+        .from("jd03_pets")
+        .select("*", { count: "exact", head: true })
+        .gt("sortie_best_kg", s.sortieBestKg);
+      if (!error && count !== null) out.best = count + 1;
     }
     const { count: c2, error: e2 } = await sb
       .from("jd03_pets")

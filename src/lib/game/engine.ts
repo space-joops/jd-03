@@ -52,8 +52,7 @@ export const COOLDOWNS: Record<string, number> = {
   sortie: 60_000,
 };
 
-/** 수동 조종 출격 (미니게임) */
-export const SORTIE_MS = 30_000;
+/** 수동 조종 출격 (미니게임) — 연료 서바이벌 모드, 본편 추진제 비용 */
 export const SORTIE_PROP_COST = 5;
 
 /** KST 기준 ISO 주차 키 ('2026-W29') — 주간 리더보드의 주 경계 */
@@ -75,6 +74,8 @@ export interface SortieOutcome {
   kg: number;
   eaten: number;
   hits: number;
+  /** 비행 시간(초) */
+  sec: number;
 }
 
 /** 궤도 이벤트 지속시간 */
@@ -162,6 +163,7 @@ export function initialState(name: string, now: number): GameState {
     sortieBestKg: 0,
     sortieWeek: "",
     sortieWeekBestKg: 0,
+    sortieGen: 2,
     cd: {},
     lastTick: now,
     log: [
@@ -414,7 +416,7 @@ export function settleSortie(prev: GameState, r: SortieOutcome, now: number): Ga
   s.totalEncounters += r.eaten;
   // 직접 조종은 신난다 — 단, 부딪힌 만큼 깎인다
   s.mood = clamp(s.mood + 8 - r.hits * 3, 0, 100);
-  pushLog(s, `🕹 수동 조종 복귀 — 잔해 ${r.eaten}개 직접 수거! (+${kg}kg)`, "gain");
+  pushLog(s, `🕹 수동 조종 복귀 — ${r.sec}초 비행, 잔해 ${r.eaten}개 직접 수거! (+${kg}kg)`, "gain");
   if (kg > s.sortieBestKg) {
     const hadPrev = s.sortieBestKg > 0;
     s.sortieBestKg = kg;
@@ -529,7 +531,7 @@ export function act(prev: GameState, action: ActionId, now: number): GameState {
       }
       s.prop -= SORTIE_PROP_COST;
       setCd();
-      pushLog(s, "🕹 수동 조종 모드 진입 — 30초간 직접 기동해 잔해를 수거하자!", "sys");
+      pushLog(s, "🕹 수동 조종 모드 진입 — 연료가 바닥날 때까지 잔해를 수거하자!", "sys");
       return s;
     }
     case "salvage": {

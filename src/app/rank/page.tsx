@@ -14,6 +14,7 @@ import type { Branch, GameState } from "@/lib/game/types";
 import { STAGE_NAMES, weekKey } from "@/lib/game/engine";
 import { kgAnalogy, shareRankImage } from "@/lib/game/bragImage";
 import {
+  fetchBestTop,
   fetchHallOfFame,
   fetchMyRanks,
   fetchTotalTop,
@@ -26,7 +27,9 @@ import {
   type LbHallRow,
   type LbPet,
   type LbWeeklyRow,
+  type MyRanks,
 } from "@/lib/game/leaderboard";
+import type { RankBoard } from "@/lib/game/bragImage";
 import { loadState } from "@/lib/game/storage";
 import { ORBIT_SPRITES, drawSprite, spriteH, spriteW } from "@/lib/game/sprites";
 
@@ -70,7 +73,7 @@ function SpriteIcon({ stage, size }: { stage: number; size: number }) {
 
 const medal = (rank: number) => (rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : `${rank}`);
 
-type Tab = "weekly" | "total" | "hall";
+type Tab = "weekly" | "best" | "total" | "hall";
 
 /** 업적 모달에 띄울 공통 형태 */
 interface Achievement {
@@ -88,25 +91,25 @@ interface Achievement {
 export default function RankPage() {
   const [tab, setTab] = useState<Tab>("weekly");
   const [weekly, setWeekly] = useState<LbWeeklyRow[] | null>(null);
+  const [best, setBest] = useState<LbPet[] | null>(null);
   const [total, setTotal] = useState<LbPet[] | null>(null);
   const [hall, setHall] = useState<LbHallRow[] | null>(null);
   const [uid, setUid] = useState<string | null>(null);
   const [me, setMe] = useState<GameState | null>(null);
-  const [ranks, setRanks] = useState<{ weekly: number | null; total: number | null }>({
-    weekly: null,
-    total: null,
-  });
+  const [ranks, setRanks] = useState<MyRanks>({ weekly: null, best: null, total: null });
   const [detail, setDetail] = useState<Achievement | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
-    const [w, t, h, u] = await Promise.all([
+    const [w, b, t, h, u] = await Promise.all([
       fetchWeeklyTop(),
+      fetchBestTop(),
       fetchTotalTop(),
       fetchHallOfFame(),
       myUid(),
     ]);
     setWeekly(w);
+    setBest(b);
     setTotal(t);
     setHall(h);
     setUid(u);
@@ -133,9 +136,9 @@ export default function RankPage() {
   }, [reload]);
 
   const bragRank = useCallback(
-    async (board: "weekly" | "total") => {
+    async (board: RankBoard) => {
       if (!me) return;
-      const rank = board === "weekly" ? ranks.weekly : ranks.total;
+      const rank = ranks[board];
       if (!rank) return;
       try {
         const how = await shareRankImage(me, rank, board);
@@ -183,24 +186,26 @@ export default function RankPage() {
                 「{stageLabel(me.stage, me.branch)}」
               </span>
             </div>
-            <div className="flex gap-2">
-              <span className="flex-1 border border-[#1c2440] px-2 py-1.5 text-[#c7cde6]">
-                주간 신기록{" "}
-                <b className="text-[#ffd166]">{ranks.weekly ? `#${ranks.weekly}` : "—"}</b>
-                {ranks.weekly && (
-                  <button onClick={() => bragRank("weekly")} className="ml-2 underline text-[#7dd3fc]">
-                    자랑
-                  </button>
-                )}
-              </span>
-              <span className="flex-1 border border-[#1c2440] px-2 py-1.5 text-[#c7cde6]">
-                누적 <b className="text-[#ffd166]">{ranks.total ? `#${ranks.total}` : "—"}</b>
-                {ranks.total && (
-                  <button onClick={() => bragRank("total")} className="ml-2 underline text-[#7dd3fc]">
-                    자랑
-                  </button>
-                )}
-              </span>
+            <div className="grid grid-cols-3 gap-1.5 text-[11px]">
+              {(
+                [
+                  ["weekly", "주간"],
+                  ["best", "단판"],
+                  ["total", "누적"],
+                ] as [RankBoard, string][]
+              ).map(([board, label]) => (
+                <span key={board} className="border border-[#1c2440] px-1.5 py-1.5 text-[#c7cde6]">
+                  {label} <b className="text-[#ffd166]">{ranks[board] ? `#${ranks[board]}` : "—"}</b>
+                  {ranks[board] && (
+                    <button
+                      onClick={() => bragRank(board)}
+                      className="ml-1.5 underline text-[#7dd3fc]"
+                    >
+                      자랑
+                    </button>
+                  )}
+                </span>
+              ))}
             </div>
           </>
         ) : (
@@ -219,12 +224,13 @@ export default function RankPage() {
       </section>
 
       {/* 탭 */}
-      <nav className="grid grid-cols-3 gap-1 text-[12px]">
+      <nav className="grid grid-cols-4 gap-1 text-[11px]">
         {(
           [
-            ["weekly", `🕹 주간 신기록`],
-            ["total", "🛰 누적 수거량"],
-            ["hall", "🏛 명예의 전당"],
+            ["weekly", "🕹 주간"],
+            ["best", "🏆 단판"],
+            ["total", "🛰 누적"],
+            ["hall", "🏛 전당"],
           ] as [Tab, string][]
         ).map(([t, label]) => (
           <button
@@ -242,7 +248,12 @@ export default function RankPage() {
       </nav>
       {tab === "weekly" && (
         <p className="px-1 text-[11px] text-[#5a6284]">
-          {currentWeek} · 매주 월요일(KST) 리셋 — 30초 수동 조종 최고 기록
+          {currentWeek} · 매주 월요일(KST) 리셋 — 이번 주 한 출격 최고 기록
+        </p>
+      )}
+      {tab === "best" && (
+        <p className="px-1 text-[11px] text-[#5a6284]">
+          역대 한 출격(연료 서바이벌) 최고 기록 — 리셋 없음
         </p>
       )}
 
@@ -286,6 +297,45 @@ export default function RankPage() {
                   </span>
                 </span>
                 <span className="shrink-0 text-[#7ee8a2]">{r.best_kg.toLocaleString()}kg</span>
+              </button>
+            ))
+          ))}
+
+        {tab === "best" &&
+          (best === null ? (
+            <p className="py-8 text-center text-[12px] text-[#5a6284]">불러오는 중…</p>
+          ) : best.length === 0 ? (
+            <p className="py-8 text-center text-[12px] text-[#5a6284]">
+              아직 단판 기록이 없어요. 첫 기록의 주인공이 되어보세요!
+            </p>
+          ) : (
+            best.map((p, i) => (
+              <button
+                key={p.id}
+                onClick={() =>
+                  setDetail({
+                    name: p.name,
+                    stage: p.stage,
+                    branch: p.branch,
+                    debrisKg: p.debris_kg,
+                    encounters: p.total_encounters,
+                    sortieBestKg: p.sortie_best_kg,
+                    missionStartedAt: p.mission_started_at,
+                  })
+                }
+                className={`flex w-full items-center gap-2 border-2 bg-[#0b0f1e] px-2 py-1.5 text-left text-[12px] ${
+                  p.id === uid ? "border-[#ffd166]" : "border-[#1c2440]"
+                }`}
+              >
+                <span className="w-7 shrink-0 text-center text-[13px]">{medal(i + 1)}</span>
+                <SpriteIcon stage={p.stage} size={30} />
+                <span className="min-w-0 flex-1 truncate">
+                  <span className="text-[#e8ecff]">{p.name}</span>{" "}
+                  <span style={{ color: BRANCH_COLORS[p.branch] }}>
+                    {stageLabel(p.stage, p.branch)}
+                  </span>
+                </span>
+                <span className="shrink-0 text-[#7ee8a2]">{p.sortie_best_kg.toLocaleString()}kg</span>
               </button>
             ))
           ))}
