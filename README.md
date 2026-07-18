@@ -1,36 +1,113 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🛰 STELLAPET — 궤도 청소 다마고치
 
-## Getting Started
+> 2031년, 케슬러 신드롬 발생. 연쇄 충돌로 저궤도는 파편의 바다가 되었고 인류의 우주 진출은 봉쇄되었다.
+> 그래서 우리는 **스텔라펫**을 만들었다 — 우주 쓰레기를 먹고 자라는 생체 위성.
+> 이제 모든 시민이 한 마리씩 키워 궤도로 보낸다. 당신에게 알 하나가 배정되었습니다. 🥚
 
-First, run the development server:
+알을 부화시켜 지상에서 키우고, 로켓에 태워 궤도로 보내고, 우주 쓰레기를 먹여 진화시키는 **모바일 우선 픽셀 아트 다마고치**입니다. 게임 엔진·오디오 파일·이미지 에셋 없이 순수 웹 기술만으로 만들었습니다.
+
+## 주요 기능
+
+### 코어 루프
+
+`알 → 지상 육성 → 발사 대기 → 발사 → 궤도 임무` 로 이어지는 단방향 성장 루프.
+
+- **알 품기** — 3번 품으면 부화
+- **지상 육성** — 먹이(체중)·훈련(훈련도)·보살핌(기분)으로 발사 자격(체중 500g, 훈련 30)을 달성
+- **라이드셰어 발사** — 5분 간격의 공동 발사 윈도우에 등록, T- 카운트다운 후 13초 발사 시퀀스
+- **궤도 임무** — 고도 550km에서 잔해 자동 수거. 지상 육성 결과가 궤도 스탯(스피드·당김·추진제)으로 환산됨
+
+### 궤도 콘텐츠
+
+- **궤도 이벤트** — ☄ 유성우(조우 급증·충돌 위험), 🌞 태양 플레어(센서 교란), 📍 대형 잔해 발견(30초 내 견인 도전)
+- **진화와 계열 분기** — 수거량 임계값(200/1,000/5,000kg)으로 4단계 진화. 2단계부터 스탯 성향에 따라 **스피드/당김/균형** 계열로 갈리며 단계 이름과 성장 보너스가 달라짐
+- **수동 조종 미니게임** — 전체 화면으로 전환해 **조그셔틀(3단 분사)** 로 직접 기동. 우주 관성·벽 반동 물리, 사방에서 진입하는 잔해, 연료 관리. 결과는 본편 수거량·기분·진화에 정산
+- **부재중 정산** — 최대 8시간까지 오프라인 진행을 요약 정산. 발사 윈도우를 자느라 놓치는 일은 없음
+
+### 프레젠테이션
+
+- **픽셀 아트 캔버스** — 240×200 논리 해상도, 코드로 그린 스프라이트(지구·궤도·로켓·펫 4단 진화형)와 이벤트 연출
+- **사운드** — Web Audio 신시사이저로 즉석 합성(오디오 파일 0개). 이벤트 로그 kind → 효과음 자동 매핑, 미니게임 엔진음 루프, 🔊/🔇 뮤트 저장
+- **자랑 카드** — 펫 상태를 텍스트 카드로 클립보드 복사
+
+### PWA (앱 설치 / 오프라인)
+
+- 홈 화면에 **앱처럼 설치** (매니페스트 + 전체화면 실행 + 픽셀 아이콘)
+- 서비스 워커로 **오프라인 구동** (셸 캐싱, 게임 저장은 localStorage라 완전 오프라인 플레이 가능)
+- 푸터의 **앱 설치 버튼** (미지원 환경엔 플랫폼별 안내 토스트)
+- **캐시 버전 자동 관리** — `package.json`의 `version`이 푸터 표기와 서비스 워커 캐시 세대의 단일 원본
+
+## 기술 스택
+
+| 분야 | 선택 |
+| --- | --- |
+| 프레임워크 | Next.js 15 (App Router, Turbopack) + React 19 + TypeScript |
+| 스타일 | Tailwind CSS 4, [Galmuri](https://galmuri.quiple.dev/) 픽셀 폰트 |
+| 렌더링 | Canvas 2D (픽셀 아트, `imageRendering: pixelated`) |
+| 사운드 | Web Audio API (오실레이터 합성) |
+| 저장 | localStorage (버전 필드 + 구버전 백필) |
+| PWA | 수제 서비스 워커 + `app/manifest.ts` |
+
+외부 게임 엔진, 상태 관리 라이브러리, 오디오/이미지 에셋을 쓰지 않습니다.
+
+## 시작하기
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev     # 개발 서버 — http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+```bash
+npm run build   # 프로덕션 빌드 (린트 + 타입 체크 포함)
+npm run start   # 빌드 결과 서빙 — PWA 설치/서비스 워커는 여기서만 동작
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+> 서비스 워커는 개발 중 캐시 오염을 막기 위해 **프로덕션 빌드에서만** 등록됩니다. PWA 설치를 테스트하려면 `build` + `start` 후 크롬에서 접속하세요.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 프로젝트 구조
 
-## Learn More
+```
+src/
+├─ app/
+│  ├─ layout.tsx        # 메타데이터·뷰포트·PWA(iOS) 설정
+│  ├─ page.tsx          # 진입점 (Game 렌더)
+│  └─ manifest.ts       # PWA 웹 앱 매니페스트
+├─ components/
+│  ├─ Game.tsx          # 메인 UI — 상태 패널·액션 버튼·로그·푸터, 사운드 훅
+│  ├─ PixelView.tsx     # 본편 픽셀 캔버스 (지상/발사/궤도 씬)
+│  ├─ SortieGame.tsx    # 수동 조종 미니게임 (전체 화면, 조그셔틀+관성 물리)
+│  └─ SwRegister.tsx    # 서비스 워커 등록 (프로덕션 전용)
+└─ lib/game/
+   ├─ engine.ts         # 게임 규칙의 전부 — tick/act/catchUp/진화/정산 (순수 함수)
+   ├─ types.ts          # GameState 등 타입 정의
+   ├─ storage.ts        # localStorage 저장/로드 + 구버전 백필
+   ├─ sprites.ts        # 픽셀 스프라이트 데이터와 그리기
+   └─ sound.ts          # Web Audio 신시사이저
+public/
+├─ sw.js                # 서비스 워커 (오프라인 캐싱)
+└─ icons/               # PWA 아이콘 (EGG 스프라이트에서 생성)
+docs/                   # 아래 '문서' 참조
+```
 
-To learn more about Next.js, take a look at the following resources:
+## 문서
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| 문서 | 내용 |
+| --- | --- |
+| [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) | **게임 요구사항 명세** — 단계 흐름·모든 밸런스 수치·이벤트 규칙·PWA/사운드 요구사항. 수치의 문서상 원본 |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | **코드 아키텍처** — 순수 엔진/표현 분리, 데이터 흐름, 모듈별 역할, 미니게임 루프 구조 |
+| [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) | **컨트리뷰션 가이드** — 웹 개발이 처음이어도 따라올 수 있는 참여 안내서 |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 버전과 배포
 
-## Deploy on Vercel
+버전의 단일 원본은 `package.json`의 `version`입니다.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npm version patch   # 0.2.1 → 0.2.2 (버그 수정)
+npm version minor   # 0.2.1 → 0.3.0 (기능 추가)
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+버전을 올려 배포하면 ① 푸터의 `v{버전}` 표기가 바뀌고 ② 서비스 워커 등록 URL(`/sw.js?v={버전}`)이 바뀌어 새 워커가 설치되면서 이전 세대 캐시가 자동 정리됩니다. 페이지 네비게이션이 네트워크 우선이라, 온라인 상태에서 앱을 다시 열면 항상 최신 버전이 적용됩니다.
+
+## 참조 프로젝트
+
+- **jd-02 (스페이스 죽스)** — 미니게임의 게임 루프 구조(클로저 상태, update/draw 분리, dt 상한), 조그셔틀·추진 물리, 판정 손맛(후한 획득/짠 피격/자석), Web Audio 사운드 시스템을 참조했습니다.
