@@ -385,11 +385,16 @@ export type ActionId =
   | "salvage"
   | "sortie";
 
+/** 수동 조종 원시 kg → 정산 kg (당김·기분 배율). 데모 출격 결과 계산에도 쓰인다 */
+export function sortieYieldKg(s: GameState, rawKg: number): number {
+  return Math.round(rawKg * (1 + s.pull * 0.08) * yieldMult(s));
+}
+
 /** 수동 조종 결과 정산: 수거량 반영(본편과 같은 배율) + 기분 변화 + 진화 체크 */
 export function settleSortie(prev: GameState, r: SortieOutcome, now: number): GameState {
   const s: GameState = { ...prev, cd: { ...prev.cd }, log: [...prev.log] };
   s.lastTick = now;
-  const kg = Math.round(r.kg * (1 + s.pull * 0.08) * yieldMult(s));
+  const kg = sortieYieldKg(s, r.kg);
   s.debrisKg += kg;
   s.totalEncounters += r.eaten;
   // 직접 조종은 신난다 — 단, 부딪힌 만큼 깎인다

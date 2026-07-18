@@ -15,6 +15,7 @@ import {
   SALVAGE_PROP_COST,
   settleSortie,
   SORTIE_PROP_COST,
+  sortieYieldKg,
   stageName,
   tick,
   type SortieOutcome,
@@ -51,6 +52,23 @@ interface SharePrompt {
 
 /** 공유 프롬프트를 띄우는 임무 일차 기념일 */
 const MILESTONE_DAYS = [7, 30, 100];
+
+/** 도전장 링크 (`/?c={kg}&n={이름}`)로 들어온 방문자 정보 */
+interface Challenge {
+  kg: number;
+  name: string;
+}
+
+/** 펫 없이 도전 출격할 때 쓰는 데모 기체 — 준수한 초반 스탯 */
+const DEMO_STATE: GameState = (() => {
+  const s = initialState("도전자", 0);
+  s.phase = "orbit";
+  s.stage = 1;
+  s.speed = 12;
+  s.pull = 8;
+  s.mood = 80;
+  return s;
+})();
 
 const LOG_COLORS: Record<LogKind, string> = {
   info: "text-[#c7cde6]",
@@ -114,7 +132,17 @@ function ActionButton({
   );
 }
 
-function Intro({ onStart }: { onStart: (name: string) => void }) {
+function Intro({
+  onStart,
+  challenge,
+  demoResult,
+  onChallenge,
+}: {
+  onStart: (name: string) => void;
+  challenge: Challenge | null;
+  demoResult: { kg: number; win: boolean } | null;
+  onChallenge: () => void;
+}) {
   const [name, setName] = useState("");
   return (
     <main className="mx-auto flex min-h-dvh max-w-[420px] flex-col justify-center gap-6 px-6 py-10">
@@ -122,6 +150,40 @@ function Intro({ onStart }: { onStart: (name: string) => void }) {
         STELLAPET
         <span className="mt-1 block text-xs tracking-normal text-[#8b93b5]">궤도 청소 다마고치</span>
       </h1>
+      {challenge && !demoResult && (
+        <div className="space-y-2 border-2 border-[#f4b860] bg-[#0b0f1e] p-4 text-[13px] leading-relaxed">
+          <p className="text-[#f4b860]">
+            🕹 도전장 도착! <span className="text-[#e8ecff]">{challenge.name}</span>의 스텔라펫이
+            30초에 <span className="text-base">{challenge.kg.toLocaleString()}kg</span>을 수거했습니다.
+          </p>
+          <button onClick={onChallenge} className="pixel-btn-accent w-full py-2.5 text-[13px] blink">
+            🚀 지금 바로 도전 출격 (가입 불필요)
+          </button>
+        </div>
+      )}
+      {challenge && demoResult && (
+        <div className="space-y-1 border-2 border-[#f4b860] bg-[#0b0f1e] p-4 text-[13px] leading-relaxed">
+          {demoResult.win ? (
+            <>
+              <p className="text-[#7ee8a2]">
+                🏆 도전 성공! <span className="text-base">{demoResult.kg.toLocaleString()}kg</span> vs{" "}
+                {challenge.kg.toLocaleString()}kg — 조종 재능이 있군요!
+              </p>
+              <p className="text-[#c7cde6]">내 펫을 키우면 스탯으로 더 멀리 갈 수 있습니다.</p>
+            </>
+          ) : (
+            <>
+              <p className="text-[#f4b860]">
+                아깝다! <span className="text-base">{demoResult.kg.toLocaleString()}kg</span> vs{" "}
+                {challenge.kg.toLocaleString()}kg ({challenge.name})
+              </p>
+              <p className="text-[#c7cde6]">
+                {challenge.name}의 펫은 육성으로 스탯을 키웠습니다. 당신의 알을 받아보세요. 👇
+              </p>
+            </>
+          )}
+        </div>
+      )}
       <div className="space-y-3 border-2 border-[#1c2440] bg-[#0b0f1e] p-4 text-[13px] leading-relaxed text-[#c7cde6]">
         <p className="text-[#7dd3fc]">— 2031년, 케슬러 신드롬 발생 —</p>
         <p>
@@ -173,6 +235,25 @@ export default function Game() {
     if (promptTimer.current) clearTimeout(promptTimer.current);
     promptTimer.current = setTimeout(() => setSharePrompt(null), 12_000);
   }, []);
+
+  // 도전장 링크 파싱 (/?c={kg}&n={이름}) — URL은 정리하고 상태만 유지
+  const [challenge, setChallenge] = useState<Challenge | null>(null);
+  const [demoSortie, setDemoSortie] = useState(false);
+  const [demoResult, setDemoResult] = useState<{ kg: number; win: boolean } | null>(null);
+  useEffect(() => {
+    try {
+      const q = new URLSearchParams(window.location.search);
+      const kg = Number(q.get("c"));
+      if (!Number.isFinite(kg) || kg <= 0) return;
+      setChallenge({ kg: Math.min(999_999, Math.round(kg)), name: (q.get("n") || "누군가").slice(0, 10) });
+      window.history.replaceState(null, "", window.location.pathname);
+    } catch {
+      // 잘못된 링크는 무시
+    }
+  }, []);
+
+  // 이미 펫을 키우는 유저가 도전장을 열면 토스트로만 안내
+  const challengeToastShown = useRef(false);
 
   // 사운드 초기화: 뮤트 설정 로드 + 첫 제스처에서 오디오 언락
   useEffect(() => {
@@ -293,6 +374,24 @@ export default function Game() {
     setState((s) => (s ? act(s, a, Date.now()) : s));
   }, []);
 
+  // 기존 유저가 도전장 링크로 접속한 경우 안내
+  useEffect(() => {
+    if (challenge && state && !challengeToastShown.current) {
+      challengeToastShown.current = true;
+      showToast(`🕹 ${challenge.name}의 도전장: 30초에 ${challenge.kg.toLocaleString()}kg — 조종으로 넘어보자!`);
+    }
+  }, [challenge, state, showToast]);
+
+  const endDemoSortie = useCallback(
+    (r: SortieOutcome) => {
+      setDemoSortie(false);
+      if (!challenge) return;
+      const kg = sortieYieldKg(DEMO_STATE, r.kg);
+      setDemoResult({ kg, win: kg > challenge.kg });
+    },
+    [challenge],
+  );
+
   const shareFromPrompt = useCallback(async () => {
     if (!state || !sharePrompt) return;
     ensureAudio();
@@ -380,13 +479,24 @@ export default function Game() {
   if (!booted) return null;
   if (!state) {
     return (
-      <Intro
-        onStart={(name) => {
-          ensureAudio();
-          playTap();
-          setState(initialState(name, Date.now()));
-        }}
-      />
+      <>
+        {demoSortie && <SortieGame state={DEMO_STATE} onEnd={endDemoSortie} />}
+        <Intro
+          onStart={(name) => {
+            ensureAudio();
+            playTap();
+            setState(initialState(name, Date.now()));
+          }}
+          challenge={challenge}
+          demoResult={demoResult}
+          onChallenge={() => {
+            ensureAudio();
+            playTap();
+            setDemoResult(null);
+            setDemoSortie(true);
+          }}
+        />
+      </>
     );
   }
 

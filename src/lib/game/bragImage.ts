@@ -154,11 +154,39 @@ function toBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   });
 }
 
+/** 도전장 URL — 서버 없이 쿼리에 기록·이름을 인코딩한다 */
+export function challengeUrl(s: GameState): string {
+  return `${window.location.origin}/?c=${s.sortieBestKg}&n=${encodeURIComponent(s.name)}`;
+}
+
+/** 카드 우상단에 QR 코드 — 스크린샷 경유 유입까지 커버. 실패해도 카드는 발행 */
+async function drawQr(card: Card, url: string): Promise<void> {
+  try {
+    const QRCode = (await import("qrcode")).default;
+    const qr = document.createElement("canvas");
+    await QRCode.toCanvas(qr, url, {
+      width: 150,
+      margin: 2,
+      color: { dark: "#05060f", light: "#e8ecff" },
+    });
+    const x = SIZE - 41 - 150;
+    card.ctx.imageSmoothingEnabled = false;
+    card.ctx.drawImage(qr, x, 55, 150, 150);
+    card.ctx.font = '400 18px "Galmuri11", "Galmuri9", sans-serif';
+    card.ctx.fillStyle = "#8b93b5";
+    card.ctx.textAlign = "center";
+    card.ctx.fillText("SCAN TO PLAY", x + 75, 226);
+  } catch {
+    // QR 생성 실패는 무시
+  }
+}
+
 /** 상태 자랑 카드 (phase별 변형) */
 export async function renderBragCard(s: GameState): Promise<Blob> {
   const days = Math.max(1, Math.ceil((s.lastTick - s.createdAt) / 86_400_000));
   const card = await makeCard(s, `MISSION REPORT — DAY ${days}`);
   const { text } = card;
+  await drawQr(card, window.location.origin);
   drawPetBlock(card, s);
 
   if (s.phase === "orbit") {
@@ -190,6 +218,7 @@ export async function renderSortieCard(
   const sec = Math.round(SORTIE_MS / 1000);
   const card = await makeCard(s, "MANUAL SORTIE — NEW RECORD");
   const { text } = card;
+  await drawQr(card, challengeUrl(s)); // QR로 접속하면 바로 도전 출격
   drawPetBlock(card, s);
 
   text(`${sec}초 수동 조종 수거량`, 790, 28, "#8b93b5", 400);
@@ -240,7 +269,7 @@ export async function shareBragImage(
   s: GameState,
 ): Promise<"shared" | "copied" | "downloaded"> {
   const blob = await renderBragCard(s);
-  return shareBlob(blob, `stellapet-${s.name}.png`, bragCard(s));
+  return shareBlob(blob, `stellapet-${s.name}.png`, `${bragCard(s)}\n${window.location.origin}`);
 }
 
 export async function shareSortieImage(
@@ -252,6 +281,6 @@ export async function shareSortieImage(
   return shareBlob(
     blob,
     `stellapet-sortie-${s.name}.png`,
-    `🕹 STELLAPET 수동 조종 신기록 — ${sec}초에 ${s.sortieBestKg.toLocaleString()}kg 수거! 이 기록 깰 수 있어?\n#스텔라펫 #수동조종챌린지`,
+    `🕹 STELLAPET 수동 조종 신기록 — ${sec}초에 ${s.sortieBestKg.toLocaleString()}kg 수거! 이 기록 깰 수 있어?\n${challengeUrl(s)}\n#스텔라펫 #수동조종챌린지`,
   );
 }
