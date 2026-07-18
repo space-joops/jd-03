@@ -133,14 +133,24 @@ export default function Game() {
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [installEvt, setInstallEvt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [installed, setInstalled] = useState(false);
 
-  // PWA 설치 프롬프트 수집 (설치 가능할 때만 버튼 노출)
+  // PWA 설치 상태 감지 — 앱 모드로 실행 중이면 설치 버튼을 숨긴다
   useEffect(() => {
+    const standalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      window.matchMedia("(display-mode: fullscreen)").matches ||
+      ("standalone" in navigator && (navigator as { standalone?: boolean }).standalone === true);
+    if (standalone) setInstalled(true);
+
     const onPrompt = (e: Event) => {
       e.preventDefault();
       setInstallEvt(e as BeforeInstallPromptEvent);
     };
-    const onInstalled = () => setInstallEvt(null);
+    const onInstalled = () => {
+      setInstalled(true);
+      setInstallEvt(null);
+    };
     window.addEventListener("beforeinstallprompt", onPrompt);
     window.addEventListener("appinstalled", onInstalled);
     return () => {
@@ -198,12 +208,23 @@ export default function Game() {
   }, []);
 
   const install = useCallback(async () => {
-    if (!installEvt) return;
-    await installEvt.prompt();
-    await installEvt.userChoice;
-    // 프롬프트는 1회용 — 수락/거절과 무관하게 비운다
-    setInstallEvt(null);
-  }, [installEvt]);
+    if (installEvt) {
+      await installEvt.prompt();
+      await installEvt.userChoice;
+      // 프롬프트는 1회용 — 수락/거절과 무관하게 비운다
+      setInstallEvt(null);
+      return;
+    }
+    // 프롬프트를 못 받는 환경: 플랫폼별 설치 방법 안내
+    const ua = navigator.userAgent;
+    const isIos =
+      /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+    showToast(
+      isIos
+        ? "Safari 공유 버튼 → '홈 화면에 추가'로 설치하세요!"
+        : "크롬·엣지(HTTPS)에서 주소창의 설치 아이콘으로 설치할 수 있어요",
+    );
+  }, [installEvt, showToast]);
 
   if (!booted) return null;
   if (!state) {
@@ -392,7 +413,7 @@ export default function Game() {
           KESSLER CLEANUP INITIATIVE <span className="text-[#2a3350]">v{APP_VERSION}</span>
         </span>
         <span className="flex gap-3">
-          {installEvt && (
+          {!installed && (
             <button onClick={install} className="underline">
               앱 설치
             </button>
