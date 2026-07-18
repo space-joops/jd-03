@@ -58,6 +58,9 @@ export interface GameState {
 
   /** 수동 조종 한 출격 최고 수거량 (정산 kg 기준) */
   sortieBestKg: number;
+  /** 주간 신기록 (리더보드용) — 해당 주차 키와 그 주의 최고 기록 */
+  sortieWeek: string;
+  sortieWeekBestKg: number;
 
   /** 액션별 쿨다운 만료 시각 */
   cd: Record<string, number>;

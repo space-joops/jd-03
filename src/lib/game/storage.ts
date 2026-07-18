@@ -16,6 +16,8 @@ export function loadState(): GameState | null {
       flareUntil: s.flareUntil ?? 0,
       offer: s.offer ?? null,
       sortieBestKg: s.sortieBestKg ?? 0,
+      sortieWeek: s.sortieWeek ?? "",
+      sortieWeekBestKg: s.sortieWeekBestKg ?? 0,
     } as GameState;
   } catch {
     return null;

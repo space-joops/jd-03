@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { GameState, LogEntry, LogKind } from "@/lib/game/types";
 import {
@@ -21,6 +22,7 @@ import {
   type SortieOutcome,
 } from "@/lib/game/engine";
 import { shareBragImage, shareSortieImage } from "@/lib/game/bragImage";
+import { getConsent, leaderboardEnabled, setConsent, syncLeaderboard } from "@/lib/game/leaderboard";
 import { clearState, loadState, saveState } from "@/lib/game/storage";
 import {
   ensureAudio,
@@ -373,6 +375,29 @@ export default function Game() {
     ensureAudio(); // 클릭 제스처 안에서 오디오 활성화 보장
     setState((s) => (s ? act(s, a, Date.now()) : s));
   }, []);
+
+  // 리더보드: 첫 기록 달성 시 1회 참가 동의 → 이후 기록·진화 변화마다 자동 동기화
+  const consentAskedRef = useRef(false);
+  const lastSyncKeyRef = useRef("");
+  const lastSyncAtRef = useRef(0);
+  useEffect(() => {
+    if (!state || !leaderboardEnabled || state.phase !== "orbit") return;
+    if (state.sortieBestKg > 0 && !consentAskedRef.current && getConsent() === null) {
+      consentAskedRef.current = true;
+      const ok = confirm(
+        "첫 기록 달성! 리더보드에 올릴까요?\n펫 이름과 기록이 다른 플레이어에게 공개됩니다.",
+      );
+      setConsent(ok);
+    }
+    if (getConsent() !== true) return;
+    // 핵심 값 변화 시 즉시, 그 외(누적 수거량)는 5분 간격으로 동기화
+    const key = `${state.sortieBestKg}|${state.sortieWeekBestKg}|${state.stage}|${state.branch}`;
+    const nowMs = Date.now();
+    if (key === lastSyncKeyRef.current && nowMs - lastSyncAtRef.current < 5 * 60_000) return;
+    lastSyncKeyRef.current = key;
+    lastSyncAtRef.current = nowMs;
+    void syncLeaderboard(state);
+  }, [state]);
 
   // 기존 유저가 도전장 링크로 접속한 경우 안내
   useEffect(() => {
@@ -733,6 +758,11 @@ export default function Game() {
           KESSLER CLEANUP INITIATIVE <span className="text-[#2a3350]">v{APP_VERSION}</span>
         </span>
         <span className="flex gap-3">
+          {leaderboardEnabled && (
+            <Link href="/rank" className="underline">
+              🏅 랭킹
+            </Link>
+          )}
           <button onClick={toggleMute} aria-label={mutedUi ? "소리 켜기" : "소리 끄기"}>
             {mutedUi ? "🔇" : "🔊"}
           </button>

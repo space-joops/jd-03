@@ -56,6 +56,19 @@ export const COOLDOWNS: Record<string, number> = {
 export const SORTIE_MS = 30_000;
 export const SORTIE_PROP_COST = 5;
 
+/** KST 기준 ISO 주차 키 ('2026-W29') — 주간 리더보드의 주 경계 */
+export function weekKey(now: number): string {
+  // KST(UTC+9)로 옮긴 뒤 UTC 필드로 ISO 주차를 계산한다 (월요일 시작)
+  const d = new Date(now + 9 * 3600_000);
+  const day = (d.getUTCDay() + 6) % 7; // 월=0
+  const thu = new Date(d.getTime());
+  thu.setUTCDate(d.getUTCDate() - day + 3);
+  const year = thu.getUTCFullYear();
+  const jan1 = Date.UTC(year, 0, 1);
+  const week = Math.ceil(((thu.getTime() - jan1) / 86_400_000 + 1) / 7);
+  return `${year}-W${String(week).padStart(2, "0")}`;
+}
+
 /** 미니게임 결과 — settleSortie로 본편에 정산한다 */
 export interface SortieOutcome {
   /** 미니게임에서 먹은 원시 kg (배율 적용 전) */
@@ -147,6 +160,8 @@ export function initialState(name: string, now: number): GameState {
     flareUntil: 0,
     offer: null,
     sortieBestKg: 0,
+    sortieWeek: "",
+    sortieWeekBestKg: 0,
     cd: {},
     lastTick: now,
     log: [
@@ -405,6 +420,13 @@ export function settleSortie(prev: GameState, r: SortieOutcome, now: number): Ga
     s.sortieBestKg = kg;
     if (hadPrev) pushLog(s, `🏆 수동 조종 신기록 경신 — 한 출격에 ${kg}kg!`, "evo");
   }
+  // 주간 신기록 (리더보드용) — 주가 바뀌면 리셋
+  const wk = weekKey(now);
+  if (s.sortieWeek !== wk) {
+    s.sortieWeek = wk;
+    s.sortieWeekBestKg = 0;
+  }
+  if (kg > s.sortieWeekBestKg) s.sortieWeekBestKg = kg;
   if (r.hits > 0) {
     pushLog(s, `기체에 긁힘 ${r.hits}회… 다음엔 파편을 조심하자`, "warn");
   }

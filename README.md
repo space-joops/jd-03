@@ -29,7 +29,8 @@
 - **픽셀 아트 캔버스** — 240×200 논리 해상도, 코드로 그린 스프라이트(지구·궤도·로켓·펫 4단 진화형)와 이벤트 연출
 - **사운드** — Web Audio 신시사이저로 즉석 합성(오디오 파일 0개). 이벤트 로그 kind → 효과음 자동 매핑, 미니게임 엔진음 루프, 🔊/🔇 뮤트 저장
 - **자랑 카드** — 펫·스탯·"경차 1.5대 분량" 비유 카피·QR이 담긴 1080×1080 픽셀 아트 이미지를 즉석 생성해 모바일 공유 시트로 공유 (클립보드/다운로드 폴백). 진화·신기록 같은 순간엔 게임이 먼저 공유를 제안
-- **도전장 시스템** — 수동 조종 신기록 카드에 도전장 링크(`/?c={kg}&n={이름}`)가 실리고, 링크로 온 방문자는 가입 없이 데모 출격으로 즉시 도전 → 승패 비교 후 알 배정 유도
+- **도전장 시스템** — 수동 조종 신기록 카드에 도전장 링크(`/c?kg={kg}&n={이름}`)가 실리고, 카톡·X 미리보기에는 내 캐릭터가 담긴 개인화 카드가 뜬다. 링크로 온 방문자는 가입 없이 데모 출격으로 즉시 도전 → 승패 비교 후 알 배정 유도
+- **리더보드** (`/rank`) — Supabase 연동 주간 신기록(월요일 리셋)·누적 수거량·명예의 전당. 익명 인증(가입 없음)에 최초 1회 공개 동의, 캐릭터 클릭 시 업적 열람, 내 순위는 랭크 카드로 자랑
 
 ### PWA (앱 설치 / 오프라인)
 
@@ -49,8 +50,9 @@
 | 저장 | localStorage (버전 필드 + 구버전 백필) |
 | PWA | 수제 서비스 워커 + `app/manifest.ts` |
 | 공유 | Canvas PNG 카드 + Web Share API, QR([qrcode](https://www.npmjs.com/package/qrcode), 동적 import), next/og 링크 미리보기 |
+| 리더보드 | [Supabase](https://supabase.com) (익명 인증 + RLS, `jd03_` 접두사 스키마, 동적 import) |
 
-외부 게임 엔진, 상태 관리 라이브러리, 오디오/이미지 에셋을 쓰지 않습니다. 런타임 의존성은 Next/React 외에 QR 생성용 `qrcode`와 픽셀 폰트 `galmuri`뿐입니다.
+외부 게임 엔진, 상태 관리 라이브러리, 오디오/이미지 에셋을 쓰지 않습니다.
 
 ## 시작하기
 
@@ -74,6 +76,7 @@ src/
 │  ├─ layout.tsx        # 메타데이터·뷰포트·OG 기본값·PWA(iOS) 설정
 │  ├─ page.tsx          # 진입점 (Game 렌더, 정적)
 │  ├─ c/page.tsx        # 도전장 랜딩 — 개인화 OG 메타 동적 생성
+│  ├─ rank/page.tsx     # 리더보드 — 주간/누적/명예의 전당, 업적 모달
 │  ├─ api/og/route.tsx  # 링크 미리보기 카드 서버 렌더 (next/og)
 │  └─ manifest.ts       # PWA 웹 앱 매니페스트
 ├─ components/
@@ -87,7 +90,10 @@ src/
    ├─ storage.ts        # localStorage 저장/로드 + 구버전 백필
    ├─ sprites.ts        # 픽셀 스프라이트 데이터와 그리기
    ├─ sound.ts          # Web Audio 신시사이저
-   └─ bragImage.ts      # 자랑/스코어 카드 PNG 생성 + QR + 공유 3단 폴백
+   ├─ bragImage.ts      # 자랑/스코어/랭크 카드 PNG 생성 + QR + 공유 3단 폴백
+   └─ leaderboard.ts    # Supabase 연동 — 익명 인증·동기화·순위 조회
+supabase/
+└─ jd03_schema.sql      # 리더보드 테이블·뷰·RLS (SQL Editor에서 실행)
 public/
 ├─ sw.js                # 서비스 워커 (오프라인 캐싱)
 └─ icons/               # PWA 아이콘 (EGG 스프라이트에서 생성)
@@ -118,6 +124,8 @@ npm version minor   # 0.2.1 → 0.3.0 (기능 추가)
 ### Vercel
 
 메인 페이지는 정적으로 서빙되고, 도전장 미리보기 라우트(`/c`, `/api/og`)만 서버리스 함수로 동작합니다. 커스텀 도메인을 쓰는 경우 OG 이미지의 절대 URL을 위해 환경변수 `NEXT_PUBLIC_SITE_URL=https://도메인`을 설정하세요 (미설정 시 Vercel 프로덕션 URL 자동 사용). 배포 후 링크 미리보기는 [카카오 공유 디버거](https://developers.kakao.com/tool/debugger/sharing)에서 확인·캐시 갱신할 수 있습니다.
+
+**리더보드(Supabase)**: 로컬 `.env.local`과 Vercel에 `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY`를 설정하고, `supabase/jd03_schema.sql`을 SQL Editor에서 실행한 뒤 Authentication에서 **Anonymous sign-ins**를 활성화하세요. env가 없으면 리더보드 기능만 조용히 꺼지고 게임은 정상 동작합니다.
 
 ## 참조 프로젝트
 

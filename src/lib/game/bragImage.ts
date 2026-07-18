@@ -230,6 +230,51 @@ export async function renderSortieCard(
   return toBlob(card.canvas);
 }
 
+/** 리더보드 랭크 카드 — 공유 시점의 순위를 박제한다 */
+export async function renderRankCard(
+  s: GameState,
+  rank: number,
+  board: "weekly" | "total",
+): Promise<Blob> {
+  const card = await makeCard(
+    s,
+    board === "weekly" ? `WEEKLY RANKING — ${s.sortieWeek || "이번 주"}` : "ALL-TIME RANKING",
+  );
+  const { text } = card;
+  await drawQr(card, `${window.location.origin}/rank`);
+  drawPetBlock(card, s);
+
+  text(board === "weekly" ? "이번 주 수동 조종 신기록 순위" : "누적 수거량 순위", 790, 28, "#8b93b5", 400);
+  text(`#${rank}`, 866, 96, "#ffd166");
+  text(
+    board === "weekly"
+      ? `주간 최고 ${s.sortieWeekBestKg.toLocaleString()}kg`
+      : `누적 ${s.debrisKg.toLocaleString()}kg`,
+    916,
+    32,
+    "#c7cde6",
+    400,
+  );
+  text("리더보드에서 나를 이겨보시죠", 962, 32, "#7dd3fc", 400);
+
+  text("#스텔라펫  #궤도청소리더보드", 1022, 28, "#7dd3fc", 400);
+  return toBlob(card.canvas);
+}
+
+export async function shareRankImage(
+  s: GameState,
+  rank: number,
+  board: "weekly" | "total",
+): Promise<"shared" | "copied" | "downloaded"> {
+  const blob = await renderRankCard(s, rank, board);
+  const label = board === "weekly" ? "이번 주 신기록" : "누적 수거량";
+  return shareBlob(
+    blob,
+    `stellapet-rank-${s.name}.png`,
+    `🏅 STELLAPET ${label} #${rank}위 — 「${stageName(s)}」 ${s.name}!\n${window.location.origin}/rank\n#스텔라펫 #궤도청소리더보드`,
+  );
+}
+
 /** 공유 3단 폴백: Web Share → 클립보드 → 다운로드. 어떤 경로였는지 반환 */
 async function shareBlob(
   blob: Blob,
