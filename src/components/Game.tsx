@@ -19,6 +19,14 @@ import {
 import { clearState, loadState, saveState } from "@/lib/game/storage";
 import PixelView from "./PixelView";
 
+const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION ?? "dev";
+
+/** 크롬 계열의 PWA 설치 프롬프트 이벤트 (표준 타입 미제공) */
+interface BeforeInstallPromptEvent extends Event {
+  prompt(): Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+}
+
 const LOG_COLORS: Record<LogKind, string> = {
   info: "text-[#c7cde6]",
   gain: "text-[#7ee8a2]",
@@ -124,6 +132,22 @@ export default function Game() {
   const [booted, setBooted] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [installEvt, setInstallEvt] = useState<BeforeInstallPromptEvent | null>(null);
+
+  // PWA 설치 프롬프트 수집 (설치 가능할 때만 버튼 노출)
+  useEffect(() => {
+    const onPrompt = (e: Event) => {
+      e.preventDefault();
+      setInstallEvt(e as BeforeInstallPromptEvent);
+    };
+    const onInstalled = () => setInstallEvt(null);
+    window.addEventListener("beforeinstallprompt", onPrompt);
+    window.addEventListener("appinstalled", onInstalled);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", onPrompt);
+      window.removeEventListener("appinstalled", onInstalled);
+    };
+  }, []);
 
   // 부팅: 저장 데이터 로드 + 부재중 정산
   useEffect(() => {
@@ -172,6 +196,14 @@ export default function Game() {
       setState(null);
     }
   }, []);
+
+  const install = useCallback(async () => {
+    if (!installEvt) return;
+    await installEvt.prompt();
+    await installEvt.userChoice;
+    // 프롬프트는 1회용 — 수락/거절과 무관하게 비운다
+    setInstallEvt(null);
+  }, [installEvt]);
 
   if (!booted) return null;
   if (!state) {
@@ -356,10 +388,19 @@ export default function Game() {
 
       {/* 푸터 */}
       <footer className="flex shrink-0 justify-between px-1 text-[10px] text-[#3a4468]">
-        <span>KESSLER CLEANUP INITIATIVE</span>
-        <button onClick={reset} className="underline">
-          초기화
-        </button>
+        <span>
+          KESSLER CLEANUP INITIATIVE <span className="text-[#2a3350]">v{APP_VERSION}</span>
+        </span>
+        <span className="flex gap-3">
+          {installEvt && (
+            <button onClick={install} className="underline">
+              앱 설치
+            </button>
+          )}
+          <button onClick={reset} className="underline">
+            초기화
+          </button>
+        </span>
       </footer>
     </main>
   );
