@@ -434,7 +434,7 @@ export default function Game() {
         )}
         {state.phase === "orbit" && sortie && (
           <p className="col-span-4 py-3 text-center text-[12px] text-[#8b93b5]">
-            🕹 드래그로 펫을 조종해 잔해를 먹어치우자!
+            🕹 화면을 누르면 조그셔틀 — 드래그 거리로 3단 분사!
           </p>
         )}
         {state.phase === "orbit" && !sortie && (
