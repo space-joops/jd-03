@@ -104,6 +104,7 @@ docs/                   # 아래 '문서' 참조
 
 | 문서 | 내용 |
 | --- | --- |
+| [study/](study/README.md) | **인수인계 스터디 가이드 (13장)** — 웹 개발 기초부터 게임 로직·코드 해설까지. 처음 합류했다면 여기부터 |
 | [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) | **게임 요구사항 명세** — 단계 흐름·모든 밸런스 수치·이벤트 규칙·PWA/사운드 요구사항. 수치의 문서상 원본 |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | **코드 아키텍처** — 순수 엔진/표현 분리, 데이터 흐름, 모듈별 역할, 미니게임 루프 구조 |
 | [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) | **컨트리뷰션 가이드** — 웹 개발이 처음이어도 따라올 수 있는 참여 안내서 |

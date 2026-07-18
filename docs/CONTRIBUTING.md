@@ -88,6 +88,8 @@ npm run dev
 
 나머지가 궁금해지면 [ARCHITECTURE.md](ARCHITECTURE.md)(코드 구조)와 [REQUIREMENTS.md](REQUIREMENTS.md)(게임 규칙 명세)를 읽어 보세요.
 
+> 📚 **더 깊이 배우고 싶다면**: [`study/`](../study/README.md) 폴더에 13장짜리 인수인계 가이드가 있습니다. 웹 개발 기초(HTML/CSS/JS/React)부터 이 프로젝트의 게임 엔진·캔버스·사운드·PWA·리더보드까지 코드와 함께 친절하게 설명합니다.
+
 ---
 
 ## 5. 첫 수정 실습: 밸런스 숫자 바꿔보기
