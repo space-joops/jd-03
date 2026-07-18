@@ -256,7 +256,6 @@ export default function SortieGame({
   onEndRef.current = onEnd;
   // 마운트 시점 스탯만 쓴다 — 게임 중 본편 상태 변화에 흔들리지 않게
   const initialRef = useRef(state);
-  const finishRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -311,6 +310,8 @@ export default function SortieGame({
     const junks: Junk[] = [];
     const popups: Popup[] = [];
     let done = false;
+    /** HUD 안 [RETURN] 버튼의 탭 판정 영역 (논리 px, y는 HUD 전 높이) */
+    const returnRect = { x: 0, w: 0 };
 
     // 조종 버튼 클릭 제스처 직후라 오디오가 살아 있다 — 출격 휘리릭
     ensureAudio();
@@ -324,7 +325,6 @@ export default function SortieGame({
       playSortieEnd();
       onEndRef.current({ kg: Math.round(kgCollected), eaten, hits, sec: Math.round(elapsed) });
     };
-    finishRef.current = finish;
 
     const eat = (j: Junk) => {
       j.eatT = 0;
@@ -581,9 +581,17 @@ export default function SortieGame({
       ctx.font = "10px monospace";
       ctx.fillStyle = "#7dd3fc";
       ctx.fillText(`T+${String(Math.floor(elapsed)).padStart(2, "0")}s`, 5, 14);
+      // [RETURN] 버튼 — kg 표시와 같은 스타일로 우측에 나란히, 탭하면 복귀
+      const retText = "[RETURN]";
+      const retW = ctx.measureText(retText).width;
+      const retX = w - 6 - retW;
+      ctx.fillStyle = "#f4b860";
+      ctx.fillText(retText, retX, 14);
+      returnRect.x = retX - 6;
+      returnRect.w = retW + 12;
       ctx.fillStyle = "#7ee8a2";
       const kgText = `${Math.round(kgCollected)}kg (${eaten})`;
-      ctx.fillText(kgText, w - 6 - ctx.measureText(kgText).width, 14);
+      ctx.fillText(kgText, retX - 10 - ctx.measureText(kgText).width, 14);
       if (hits > 0) {
         ctx.fillStyle = "#ff6b6b";
         ctx.fillText(`×${hits}`, 64, 14);
@@ -619,6 +627,11 @@ export default function SortieGame({
     };
     const onDown = (e: PointerEvent) => {
       const p = toLocal(e);
+      // HUD의 [RETURN] 버튼 탭 — 조그셔틀을 시작하지 않고 복귀
+      if (p.y <= HUD_H + 4 && p.x >= returnRect.x && p.x <= returnRect.x + returnRect.w) {
+        finish();
+        return;
+      }
       joyOx = p.x;
       joyOy = p.y;
       joyCx = p.x;
@@ -673,13 +686,6 @@ export default function SortieGame({
         style={{ imageRendering: "pixelated" }}
         aria-label="수동 조종 미니게임 화면"
       />
-      <button
-        onClick={() => finishRef.current()}
-        className="absolute right-2 border border-[#1c2440] bg-[#0b0f1e]/85 px-2.5 py-1.5 text-[11px] text-[#8b93b5]"
-        style={{ top: "max(1.5rem, env(safe-area-inset-top))" }}
-      >
-        조기 복귀 ▲
-      </button>
     </div>
   );
 }
