@@ -77,6 +77,12 @@ jd-02의 Web Audio 신시사이저 참조 — 오디오 파일 0개.
 - 리더보드 "역대 단판" 탭 추가(sortie_best_kg 정렬, 테이블 추가 없음)
 - 기록 세대(`sortieGen`) 도입 — 구모드 기록은 로컬 자동 리셋 + 서버 SQL(`jd03_reset_sortie_records.sql`)
 
+## 10. 반응형·UX 다듬기
+
+- 가로 화면 대응 (`b88f58b`): orientation 미디어쿼리 2컬럼 레이아웃(세로는 display:contents로 단일 컬럼 유지), PWA 회전 허용(orientation any)
+- 액션 버튼 밀림 버그 수정 (`ab8e1ea`): 버튼+푸터를 sticky 바로 화면 하단 상시 고정, 짧은 화면에서 픽셀 캔버스 폭 상한(50dvh) — 헤드리스 크롬으로 재현·검증
+- 미니게임 조기 복귀 버튼을 캔버스 HUD 내 `[RETURN]`으로 통합 (`28ff149`) — kg 표시와 같은 스타일로 나란히, 탭 판정
+
 ## 현재 상태 요약
 
 | 영역 | 상태 |
