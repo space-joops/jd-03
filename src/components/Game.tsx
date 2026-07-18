@@ -147,7 +147,7 @@ function Intro({
 }) {
   const [name, setName] = useState("");
   return (
-    <main className="mx-auto flex min-h-dvh max-w-[420px] flex-col justify-center gap-6 px-6 py-10">
+    <main className="mx-auto flex min-h-dvh max-w-[420px] flex-col justify-center gap-6 px-6 py-10 landscape:justify-start landscape:py-6">
       <h1 className="text-center text-2xl tracking-widest text-[#7ee8a2]">
         STELLAPET
         <span className="mt-1 block text-xs tracking-normal text-[#8b93b5]">궤도 청소 다마고치</span>
@@ -543,7 +543,10 @@ export default function Game() {
   };
 
   return (
-    <main className="mx-auto flex h-dvh max-w-[420px] flex-col gap-2 overflow-y-auto px-3 pb-3 pt-4">
+    <main className="mx-auto flex h-dvh max-w-[420px] flex-col gap-2 overflow-y-auto px-3 pb-3 pt-4 landscape:max-w-[900px] landscape:flex-row landscape:items-stretch landscape:gap-3">
+      {/* 가로 화면: 왼쪽 컬럼(헤더+픽셀 뷰) — 세로에서는 display:contents로 단일 컬럼에 녹는다.
+          폭은 픽셀 뷰(240:200)가 화면 높이에 맞도록 min()으로 상한 */}
+      <div className="contents landscape:flex landscape:w-[min(46%,calc((100dvh-62px)*1.2))] landscape:shrink-0 landscape:flex-col landscape:gap-2">
       {/* 헤더 */}
       <header className="flex shrink-0 items-baseline justify-between px-1">
         <h1 className="text-sm tracking-widest text-[#7ee8a2]">STELLAPET</h1>
@@ -572,6 +575,10 @@ export default function Game() {
         )}
       </div>
 
+      </div>
+
+      {/* 가로 화면: 오른쪽 컬럼(상태·배너·로그·버튼·푸터) */}
+      <div className="contents landscape:flex landscape:min-h-0 landscape:min-w-0 landscape:flex-1 landscape:flex-col landscape:gap-2">
       {/* 상태 패널 */}
       <section className="shrink-0 space-y-1.5 border-2 border-[#1c2440] bg-[#0b0f1e] p-3">
         {(state.phase === "egg" || state.phase === "ground" || state.phase === "awaiting") && (
@@ -776,6 +783,7 @@ export default function Game() {
           </button>
         </span>
       </footer>
+      </div>
     </main>
   );
 }

@@ -10,7 +10,8 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: "/",
     display: "standalone",
     display_override: ["fullscreen", "standalone"],
-    orientation: "portrait",
+    // 가로 회전 허용 — 레이아웃이 orientation 미디어쿼리로 2컬럼 전환된다
+    orientation: "any",
     background_color: "#05060f",
     theme_color: "#05060f",
     categories: ["games", "entertainment"],
