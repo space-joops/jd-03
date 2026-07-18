@@ -1,4 +1,4 @@
-import type { GameState, LogKind } from "./types";
+import type { Branch, GameState, LogKind } from "./types";
 
 /** 라이드셰어 공동 발사 윈도우 간격 (5분) */
 export const WINDOW_MS = 5 * 60_000;
@@ -17,15 +17,51 @@ export const ORBIT_STAGES = [
   { name: "가디언 오브 오빗", atKg: 5000 },
 ] as const;
 
+/** 진화 계열별 단계 이름 — 2단계(1,000kg)부터 빌드에 따라 갈린다 */
+export const STAGE_NAMES: Record<Branch, string[]> = {
+  balanced: ["궤도 유영체", "데브리스 이터", "클리너 노바", "가디언 오브 오빗"],
+  speed: ["궤도 유영체", "데브리스 이터", "코멧 체이서", "델타브이 레이서"],
+  pull: ["궤도 유영체", "데브리스 이터", "그래비티 홀더", "이벤트 호라이즌"],
+};
+
+export function stageName(s: GameState): string {
+  return STAGE_NAMES[s.branch][Math.min(s.stage, 3)];
+}
+
+const BRANCH_LABEL: Record<Branch, string> = {
+  balanced: "균형",
+  speed: "스피드",
+  pull: "당김",
+};
+
+/** 현재 스탯 성향 (진화 시 계열 결정에 쓰임) */
+export function buildTendency(s: GameState): Branch {
+  if (s.speed > s.pull) return "speed";
+  if (s.pull > s.speed) return "pull";
+  return "balanced";
+}
+
 export const COOLDOWNS: Record<string, number> = {
   incubate: 3_000,
-  feed: 8_000,
-  care: 6_000,
-  train: 10_000,
+  feed: 6_000,
+  care: 5_000,
+  train: 8_000,
   boost: 25_000,
   comm: 20_000,
   supply: 90_000,
 };
+
+/** 궤도 이벤트 지속시간 */
+export const METEOR_MS = 45_000;
+export const FLARE_MS = 60_000;
+export const OFFER_MS = 30_000;
+export const SALVAGE_PROP_COST = 10;
+
+const BIG_DEBRIS: { name: string; kg: [number, number] }[] = [
+  { name: "표류하는 우주정거장 모듈", kg: [300, 800] },
+  { name: "회전하는 로켓 상단 스테이지", kg: [150, 400] },
+  { name: "폐기된 대형 통신위성", kg: [200, 500] },
+];
 
 interface DebrisType {
   name: string;
@@ -91,8 +127,12 @@ export function initialState(name: string, now: number): GameState {
     propMax: 100,
     debrisKg: 0,
     stage: 0,
+    branch: "balanced",
     boostUntil: 0,
     totalEncounters: 0,
+    meteorUntil: 0,
+    flareUntil: 0,
+    offer: null,
     cd: {},
     lastTick: now,
     log: [
@@ -109,6 +149,8 @@ const yieldMult = (s: GameState) => 0.6 + s.mood / 200;
 function encounterP(s: GameState, now: number): number {
   let p = 0.03 + s.speed * 0.004;
   if (now < s.boostUntil) p *= 4;
+  if (now < s.meteorUntil) p *= 2.5;
+  if (now < s.flareUntil) p *= 0.5;
   return Math.min(p, 0.9);
 }
 
@@ -143,22 +185,68 @@ function checkEvolution(s: GameState) {
     }
   }
   if (target > s.stage) {
+    const branching = s.stage < 2 && target >= 2;
     s.stage = target;
-    s.speed += 2;
-    s.pull += 2;
+    if (branching) s.branch = buildTendency(s);
+    // 계열별 성장 보정
+    if (s.branch === "speed") {
+      s.speed += 3;
+      s.pull += 1;
+    } else if (s.branch === "pull") {
+      s.speed += 1;
+      s.pull += 3;
+    } else {
+      s.speed += 2;
+      s.pull += 2;
+    }
     s.propMax += 20;
     s.prop = s.propMax;
-    pushLog(s, `✨ 진화! 「${ORBIT_STAGES[target].name}」 형태가 되었다!`, "evo");
+    pushLog(s, `✨ 진화! 「${stageName(s)}」 형태가 되었다!`, "evo");
+    if (branching) {
+      pushLog(s, `스탯 성향이 개화 — ${BRANCH_LABEL[s.branch]} 계열로 분기했다!`, "sys");
+    }
   }
 }
 
 function orbitTick(s: GameState, now: number) {
+  // 이벤트 종료 판정
+  if (s.meteorUntil !== 0 && now >= s.meteorUntil) {
+    s.meteorUntil = 0;
+    pushLog(s, "☄ 유성우가 지나갔다 — 궤도가 다시 잠잠해졌다.", "sys");
+  }
+  if (s.flareUntil !== 0 && now >= s.flareUntil) {
+    s.flareUntil = 0;
+    pushLog(s, "🌞 태양 플레어 종료 — 센서가 정상화됐다.", "sys");
+  }
+  if (s.offer && now >= s.offer.expiresAt) {
+    pushLog(s, `${s.offer.name}이(가) 궤도 밖으로 떠내려갔다…`, "warn");
+    s.offer = null;
+  }
+
+  // 이벤트 발생 (동시에 하나만)
+  if (now >= s.meteorUntil && now >= s.flareUntil) {
+    const r = Math.random();
+    if (r < 0.004) {
+      s.meteorUntil = now + METEOR_MS;
+      pushLog(s, "☄ 유성우 돌입! 잔해 조우 급증 — 충돌에 주의!", "evo");
+    } else if (r < 0.007) {
+      s.flareUntil = now + FLARE_MS;
+      pushLog(s, "🌞 태양 플레어 경보! 센서 교란으로 조우 효율 저하…", "warn");
+    }
+  }
+  if (!s.offer && Math.random() < 0.004) {
+    const b = BIG_DEBRIS[Math.floor(Math.random() * BIG_DEBRIS.length)];
+    const kg = Math.round(b.kg[0] + Math.random() * (b.kg[1] - b.kg[0]));
+    s.offer = { name: b.name, kg, expiresAt: now + OFFER_MS };
+    pushLog(s, `📍 대형 잔해 발견 — ${b.name} (약 ${kg}kg)! 놓치기 전에 견인하자`, "evo");
+  }
+
   // 잔해 조우
   if (Math.random() < encounterP(s, now)) {
     gainDebris(s, pickDebris());
   }
-  // 충돌 위기
-  if (Math.random() < 0.008) {
+  // 충돌 위기 — 유성우 중에는 2배
+  if (Math.random() < (now < s.meteorUntil ? 0.016 : 0.008)) {
     if (s.prop >= 8) {
       s.prop -= 8;
       pushLog(s, "⚠ 고속 파편 접근 — 회피 기동 성공 (추진제 -8)", "warn");
@@ -169,8 +257,10 @@ function orbitTick(s: GameState, now: number) {
       pushLog(s, `💥 파편과 스치는 충돌! 수거물 -${loss}kg, 기분 저하`, "warn");
     }
   }
-  // 완만한 기분 저하 (30초에 1)
-  if (Math.random() < 1 / 30) s.mood = clamp(s.mood - 1, 0, 100);
+  // 완만한 기분 저하 (30초에 1, 플레어 중에는 2배)
+  if (Math.random() < (now < s.flareUntil ? 2 / 30 : 1 / 30)) {
+    s.mood = clamp(s.mood - 1, 0, 100);
+  }
 }
 
 function groundTick(s: GameState) {
@@ -246,6 +336,10 @@ export function catchUp(prev: GameState, now: number): GameState {
     s.propMax = 100;
     pushLog(s, "🚀 부재중 발사 완료 — 궤도 안착에 성공했습니다!", "evo");
   } else if (s.phase === "orbit") {
+    // 부재중 만료된 이벤트는 조용히 정리
+    if (now >= s.meteorUntil) s.meteorUntil = 0;
+    if (now >= s.flareUntil) s.flareUntil = 0;
+    if (s.offer && now >= s.offer.expiresAt) s.offer = null;
     const ticks = elapsed / 1000;
     const p = 0.03 + s.speed * 0.004;
     const encounters = Math.floor(ticks * p * (0.8 + Math.random() * 0.4));
@@ -273,7 +367,8 @@ export type ActionId =
   | "register"
   | "boost"
   | "comm"
-  | "supply";
+  | "supply"
+  | "salvage";
 
 /** 유저 액션 적용. 실패하면 원본 상태를 그대로 반환한다. */
 export function act(prev: GameState, action: ActionId, now: number): GameState {
@@ -362,6 +457,29 @@ export function act(prev: GameState, action: ActionId, now: number): GameState {
       pushLog(s, `📦 보급 캡슐 도킹 성공 — 추진제 +${Math.round(refill)}`, "gain");
       return s;
     }
+    case "salvage": {
+      if (s.phase !== "orbit" || !s.offer || now >= s.offer.expiresAt) return prev;
+      if (s.prop < SALVAGE_PROP_COST) {
+        pushLog(s, "추진제가 부족해 견인할 수 없다… (보급 필요)", "warn");
+        return s;
+      }
+      s.prop -= SALVAGE_PROP_COST;
+      const offer = s.offer;
+      s.offer = null;
+      // 당김이 높을수록 견인 성공률 상승
+      if (Math.random() < Math.min(0.95, 0.45 + s.pull * 0.04)) {
+        const kg = Math.round(offer.kg * yieldMult(s));
+        s.debrisKg += kg;
+        s.totalEncounters += 1;
+        s.mood = clamp(s.mood + 10, 0, 100);
+        pushLog(s, `🪝 ${offer.name} 견인 성공! +${kg}kg — 대어다!`, "gain");
+        checkEvolution(s);
+      } else {
+        s.mood = clamp(s.mood - 5, 0, 100);
+        pushLog(s, `🪝 견인 실패… ${offer.name}이(가) 튕겨나가 버렸다`, "warn");
+      }
+      return s;
+    }
     default:
       return prev;
   }
@@ -369,7 +487,7 @@ export function act(prev: GameState, action: ActionId, now: number): GameState {
 
 /** 자랑 카드 텍스트 생성 */
 export function bragCard(s: GameState): string {
-  const stage = s.phase === "orbit" ? ORBIT_STAGES[s.stage].name : s.phase === "egg" ? "스텔라 알" : "아기 스텔라펫";
+  const stage = s.phase === "orbit" ? stageName(s) : s.phase === "egg" ? "스텔라 알" : "아기 스텔라펫";
   const days = Math.max(1, Math.ceil((s.lastTick - s.createdAt) / 86_400_000));
   return [
     `🛰 STELLAPET 「${s.name}」`,

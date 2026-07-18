@@ -12,6 +12,8 @@ import {
   LAUNCH_MIN_TRAINING,
   LAUNCH_MIN_WEIGHT,
   ORBIT_STAGES,
+  SALVAGE_PROP_COST,
+  stageName,
   tick,
 } from "@/lib/game/engine";
 import { clearState, loadState, saveState } from "@/lib/game/storage";
@@ -34,7 +36,7 @@ function fmtRemain(ms: number): string {
 function stageLabel(s: GameState): string {
   if (s.phase === "egg") return "스텔라 알";
   if (s.phase === "launching") return "발사 중!";
-  if (s.phase === "orbit") return ORBIT_STAGES[Math.min(s.stage, ORBIT_STAGES.length - 1)].name;
+  if (s.phase === "orbit") return stageName(s);
   return "아기 스텔라펫";
 }
 
@@ -265,6 +267,16 @@ export default function Game() {
                   부스트!
                 </span>
               )}
+              {now < state.meteorUntil && (
+                <span className="border border-[#f4b860] px-1.5 py-0.5 text-[#f4b860] blink">
+                  ☄ 유성우
+                </span>
+              )}
+              {now < state.flareUntil && (
+                <span className="border border-[#ff6b6b] px-1.5 py-0.5 text-[#ff6b6b] blink">
+                  🌞 플레어
+                </span>
+              )}
             </div>
             <Bar label="추진제" value={state.prop} max={state.propMax} color="#7dd3fc" />
             <Bar label="기분" value={state.mood} max={100} color="#ef8fb8" />
@@ -287,6 +299,18 @@ export default function Game() {
           className="pixel-btn-accent w-full shrink-0 py-3 text-[14px] blink"
         >
           🚀 라이드셰어 발사 등록 (다음 윈도우 탑승)
+        </button>
+      )}
+
+      {/* 대형 잔해 견인 배너 */}
+      {state.phase === "orbit" && state.offer && (
+        <button
+          onClick={() => dispatch("salvage")}
+          disabled={state.prop < SALVAGE_PROP_COST}
+          className="pixel-btn-accent w-full shrink-0 py-2.5 text-[13px] leading-snug disabled:opacity-40"
+        >
+          🪝 {state.offer.name} 견인! (약 {state.offer.kg}kg · 추진제 -{SALVAGE_PROP_COST}) ·{" "}
+          {Math.ceil(Math.max(0, state.offer.expiresAt - now) / 1000)}s
         </button>
       )}
 

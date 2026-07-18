@@ -6,9 +6,16 @@ export function loadState(): GameState | null {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
-    const s = JSON.parse(raw) as GameState;
+    const s = JSON.parse(raw) as Partial<GameState>;
     if (s.v !== 1 || typeof s.name !== "string") return null;
-    return s;
+    // 진화 계열·궤도 이벤트 도입 이전 세이브 필드 보강
+    return {
+      ...s,
+      branch: s.branch ?? "balanced",
+      meteorUntil: s.meteorUntil ?? 0,
+      flareUntil: s.flareUntil ?? 0,
+      offer: s.offer ?? null,
+    } as GameState;
   } catch {
     return null;
   }

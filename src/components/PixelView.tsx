@@ -239,6 +239,44 @@ function drawOrbit(ctx: CanvasRenderingContext2D, s: GameState, t: number) {
       ctx.fillRect(Math.round((dx + px) / 2) - 3, Math.round((dy + py) / 2) + 1, 2, 2);
     }
   }
+
+  // 대형 잔해 (견인 제안 중)
+  if (s.offer) {
+    const oa = ((s.offer.expiresAt % 100_000) / 100_000) * Math.PI * 2;
+    const ox = Math.round(EARTH_CX + ORBIT_RX * 1.06 * Math.cos(oa));
+    const oy = Math.round(EARTH_CY + ORBIT_RY * 1.06 * Math.sin(oa));
+    ctx.fillStyle = "#8b93b5";
+    ctx.fillRect(ox - 3, oy - 2, 7, 5);
+    ctx.fillStyle = "#5a6284";
+    ctx.fillRect(ox - 1, oy - 4, 3, 2);
+    ctx.fillRect(ox + 2, oy + 3, 3, 2);
+    if (Math.sin(t / 180) > 0) {
+      ctx.fillStyle = "#f4b860";
+      ctx.font = "9px monospace";
+      ctx.fillText("!", ox + 7, oy - 4);
+    }
+  }
+
+  // 유성우 스트릭
+  if (t < s.meteorUntil) {
+    for (let i = 0; i < 6; i++) {
+      const sp = 0.1 + (i % 3) * 0.05;
+      const mx = Math.round(W + 20 - ((t * sp + i * 97) % (W + 60)));
+      const my = Math.round(((t * sp * 0.55 + i * 53) % (H + 40)) - 20);
+      ctx.fillStyle = "#ffe08a";
+      ctx.fillRect(mx, my, 2, 2);
+      ctx.fillStyle = "rgba(255,224,138,0.55)";
+      ctx.fillRect(mx + 2, my - 2, 2, 2);
+      ctx.fillRect(mx + 4, my - 4, 1, 1);
+    }
+  }
+
+  // 태양 플레어 오버레이
+  if (t < s.flareUntil) {
+    const a = 0.07 + 0.05 * Math.sin(t / 200);
+    ctx.fillStyle = `rgba(255,140,80,${a.toFixed(3)})`;
+    ctx.fillRect(0, 0, W, H);
+  }
 }
 
 export default function PixelView({ state }: { state: GameState }) {

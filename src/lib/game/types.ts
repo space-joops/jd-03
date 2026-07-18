@@ -1,5 +1,15 @@
 export type Phase = "egg" | "ground" | "awaiting" | "launching" | "orbit";
 
+/** 진화 계열 — 스탯 빌드에 따라 갈린다 */
+export type Branch = "balanced" | "speed" | "pull";
+
+/** 대형 잔해 포획 제안 */
+export interface DebrisOffer {
+  name: string;
+  kg: number;
+  expiresAt: number;
+}
+
 export type LogKind = "info" | "gain" | "warn" | "evo" | "sys";
 
 export interface LogEntry {
@@ -37,8 +47,14 @@ export interface GameState {
   propMax: number;
   debrisKg: number;
   stage: number; // 궤도 진화 단계 인덱스
+  branch: Branch;
   boostUntil: number;
   totalEncounters: number;
+
+  /** 궤도 이벤트 */
+  meteorUntil: number;
+  flareUntil: number;
+  offer: DebrisOffer | null;
 
   /** 액션별 쿨다운 만료 시각 */
   cd: Record<string, number>;
