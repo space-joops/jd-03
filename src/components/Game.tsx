@@ -19,6 +19,7 @@ import {
   tick,
   type SortieOutcome,
 } from "@/lib/game/engine";
+import { shareBragImage } from "@/lib/game/bragImage";
 import { clearState, loadState, saveState } from "@/lib/game/storage";
 import {
   ensureAudio,
@@ -255,12 +256,18 @@ export default function Game() {
     if (!state) return;
     ensureAudio();
     playTap();
-    const card = bragCard(state);
     try {
-      await navigator.clipboard.writeText(card);
-      showToast("✨ 자랑 카드가 클립보드에 복사됐어요!");
+      const how = await shareBragImage(state);
+      if (how === "copied") showToast("📸 자랑 카드 이미지가 클립보드에 복사됐어요!");
+      else if (how === "downloaded") showToast("📸 자랑 카드 이미지를 저장했어요!");
     } catch {
-      showToast("클립보드 복사에 실패했어요 😢");
+      // 이미지 생성 실패 — 텍스트 카드로 폴백
+      try {
+        await navigator.clipboard.writeText(bragCard(state));
+        showToast("✨ 자랑 카드가 클립보드에 복사됐어요!");
+      } catch {
+        showToast("공유에 실패했어요 😢");
+      }
     }
   }, [state, showToast]);
 
