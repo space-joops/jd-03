@@ -1,5 +1,7 @@
 /** STELLAPET 서비스 워커 — 앱 셸 오프라인 캐싱 */
-const VERSION = "v1";
+// 버전은 등록 URL의 ?v= 쿼리로 받는다 (SwRegister가 package.json version을 주입).
+// 버전 업 배포 → 등록 URL 변경 → 새 워커 설치 → activate에서 이전 세대 캐시 정리.
+const VERSION = new URL(self.location.href).searchParams.get("v") || "dev";
 const CACHE = `stellapet-${VERSION}`;
 /** 설치 시 미리 캐싱하는 앱 셸 */
 const SHELL = ["/", "/manifest.webmanifest"];

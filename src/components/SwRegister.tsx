@@ -7,7 +7,10 @@ export default function SwRegister() {
   useEffect(() => {
     if (process.env.NODE_ENV !== "production") return;
     if (!("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register("/sw.js").catch(() => {
+    // package.json version을 쿼리로 전달 — 버전 업 배포 시 새 워커로 교체되어
+    // 이전 세대 캐시가 자동 정리된다
+    const v = process.env.NEXT_PUBLIC_APP_VERSION ?? "dev";
+    navigator.serviceWorker.register(`/sw.js?v=${encodeURIComponent(v)}`).catch(() => {
       // 등록 실패는 게임 진행을 막지 않는다
     });
   }, []);
