@@ -543,7 +543,7 @@ export default function Game() {
   };
 
   return (
-    <main className="mx-auto flex h-dvh max-w-[420px] flex-col gap-2 overflow-y-auto px-3 pb-3 pt-4 landscape:max-w-[900px] landscape:flex-row landscape:items-stretch landscape:gap-3">
+    <main className="mx-auto flex h-dvh max-w-[420px] flex-col gap-2 overflow-y-auto px-3 pb-0 pt-4 landscape:max-w-[900px] landscape:flex-row landscape:items-stretch landscape:gap-3 landscape:pb-3">
       {/* 가로 화면: 왼쪽 컬럼(헤더+픽셀 뷰) — 세로에서는 display:contents로 단일 컬럼에 녹는다.
           폭은 픽셀 뷰(240:200)가 화면 높이에 맞도록 min()으로 상한 */}
       <div className="contents landscape:flex landscape:w-[min(46%,calc((100dvh-62px)*1.2))] landscape:shrink-0 landscape:flex-col landscape:gap-2">
@@ -704,7 +704,7 @@ export default function Game() {
       )}
 
       {/* 이벤트 로그 */}
-      <section className="min-h-[96px] flex-1 overflow-y-auto border-2 border-[#1c2440] bg-[#070a16] p-2.5">
+      <section className="min-h-[96px] flex-1 overflow-y-auto border-2 border-[#1c2440] bg-[#070a16] p-2.5 landscape:min-h-[56px]">
         {state.log.map((e, i) => (
           <p key={`${e.t}-${i}`} className={`mb-1 text-[12px] leading-snug ${LOG_COLORS[e.kind]}`}>
             <span className="text-[#3a4468]">▸ </span>
@@ -713,6 +713,8 @@ export default function Game() {
         ))}
       </section>
 
+      {/* 액션 바 — 로그·배너가 늘어 스크롤이 생겨도 항상 화면 하단에 고정 */}
+      <div className="sticky bottom-0 z-10 -mx-3 shrink-0 space-y-2 bg-[#05060f] px-3 pb-3 pt-1 landscape:static landscape:mx-0 landscape:bg-transparent landscape:p-0">
       {/* 액션 버튼 */}
       <nav
         className={`grid shrink-0 gap-2 ${
@@ -783,6 +785,7 @@ export default function Game() {
           </button>
         </span>
       </footer>
+      </div>
       </div>
     </main>
   );

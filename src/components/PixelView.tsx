@@ -311,7 +311,9 @@ export default function PixelView({ state }: { state: GameState }) {
       ref={canvasRef}
       width={W}
       height={H}
-      className="w-full"
+      // 짧은 화면에서 캔버스가 세로 공간을 과점해 버튼을 밀어내지 않게 폭을
+      // 뷰포트 높이 기준으로 상한 (폭 50dvh → 높이 약 42dvh, 비율 유지)
+      className="mx-auto w-full max-w-[50dvh] landscape:max-w-none"
       style={{ imageRendering: "pixelated", aspectRatio: `${W}/${H}` }}
     />
   );
